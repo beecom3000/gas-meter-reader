@@ -9,7 +9,7 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>au.com.dobotics</groupId>
-    <artifactId>gmr-app</artifactId>
+    <artifactId>gmr-api</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <name>gmr-api</name>
     <description>gmr-api</description>
