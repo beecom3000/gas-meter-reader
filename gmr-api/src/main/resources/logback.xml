@@ -7,7 +7,7 @@
 
     <logger name="au.com.dobotics" level="debug" />
 
-    <root level="info">
+    <root level="debug">
         <appender-ref ref="STDOUT" />
     </root>
 </configuration>

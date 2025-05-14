@@ -1,13 +1,12 @@
 package au.com.dobotics.gmr.stream;
 
-import jakarta.annotation.PostConstruct;
-import nu.pattern.OpenCV;
-import org.opencv.core.*;
-import org.opencv.imgcodecs.Imgcodecs;
-import org.opencv.imgproc.Imgproc;
-import org.opencv.objdetect.CascadeClassifier;
+import org.bytedeco.opencv.opencv_core.Mat;
+import org.bytedeco.opencv.opencv_core.Rect;
+import org.bytedeco.opencv.opencv_core.RectVector;
+import org.bytedeco.opencv.opencv_core.Scalar;
+import org.bytedeco.opencv.opencv_objdetect.CascadeClassifier;
+import org.opencv.core.MatOfByte;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.socket.WebSocketHandler;
 import org.springframework.web.reactive.socket.WebSocketMessage;
@@ -16,6 +15,9 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.nio.ByteBuffer;
+
+import static org.bytedeco.opencv.global.opencv_imgcodecs.*;
+import static org.bytedeco.opencv.global.opencv_imgproc.rectangle;
 
 @Component
 public class VideoStreamWebSocketHandler implements WebSocketHandler {
@@ -37,16 +39,15 @@ public class VideoStreamWebSocketHandler implements WebSocketHandler {
                     byte[] bytes = new byte[buffer.remaining()];
                     buffer.get(bytes);
 
-                    Mat img = Imgcodecs.imdecode(new MatOfByte(bytes), Imgcodecs.IMREAD_COLOR);
+                    Mat img = imdecode(new Mat(bytes), IMREAD_COLOR);
                     if (img.empty()) {
                         return Mono.empty();
                     }
 
                     Mat processed = detectObjects(img);
 
-                    MatOfByte mob = new MatOfByte();
-                    Imgcodecs.imencode(".jpg", processed, mob);
-                    ByteBuffer outputBuffer = ByteBuffer.wrap(mob.toArray());
+                    ByteBuffer outputBuffer = ByteBuffer.allocate(1);
+                    imencode(".jpg", processed, outputBuffer);
 
                     return Mono.just(session.binaryMessage(dataBufferFactory -> dataBufferFactory.wrap(outputBuffer)));
                 })
@@ -54,11 +55,11 @@ public class VideoStreamWebSocketHandler implements WebSocketHandler {
     }
 
     private Mat detectObjects(Mat frame) {
-        MatOfRect faces = new MatOfRect();
+        RectVector faces = new RectVector();
         faceDetector.detectMultiScale(frame, faces);
 
-        for (Rect rect : faces.toArray()) {
-            Imgproc.rectangle(frame, rect, new Scalar(0, 255, 0), 2);
+        for (Rect rect : faces.get()) {
+            rectangle(frame, rect, Scalar.GREEN);
         }
 
         return frame;

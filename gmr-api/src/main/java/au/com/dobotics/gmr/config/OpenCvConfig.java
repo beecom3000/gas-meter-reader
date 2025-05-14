@@ -2,8 +2,9 @@ package au.com.dobotics.gmr.config;
 
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import nu.pattern.OpenCV;
-import org.opencv.objdetect.CascadeClassifier;
+import org.bytedeco.javacpp.Loader;
+import org.bytedeco.opencv.opencv_java;
+import org.bytedeco.opencv.opencv_objdetect.CascadeClassifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -15,7 +16,7 @@ public class OpenCvConfig {
 
     @PostConstruct
     public void init() {
-        OpenCV.loadLocally();
+        log.info("Loading OpenCV configuration");
     }
 
     @Bean

@@ -27,8 +27,13 @@ public class SocketIOConfig {
         com.corundumstudio.socketio.Configuration config = new com.corundumstudio.socketio.Configuration();
         config.setHostname(this.hostname);
         config.setPort(this.port);
-        config.setMaxFramePayloadLength(this.maxFramePayloadLength); // Set max frame length to 1MB
+        config.setOrigin("*");
+        // Enable binary support
+//        config.setUseLinuxNativeEpoll(true); // For Linux performance
+        config.setMaxFramePayloadLength(100 * 1024 * 1024); // 100MB
+        config.setMaxHttpContentLength(100 * 1024 * 1024); // 100MB
         SocketIOServer server = new SocketIOServer(config);
+
         server.addConnectListener(client -> log.info("Client connected: {}", client.getSessionId()));
         server.addDisconnectListener(client -> log.info("Client disconnected: {}", client.getSessionId()));
         return server;

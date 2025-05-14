@@ -4,7 +4,8 @@ import lombok.Data;
 
 @Data
 public class FrameData {
-    private String frame;
+    private byte[] frame;
     private int width;
     private int height;
+    private long timestamp;
 }
