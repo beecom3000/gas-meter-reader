@@ -113,7 +113,7 @@ public class SocketIOEventHandler {
             payload.put("width", width);
             payload.put("height", height);
             payload.put("timestamp", System.currentTimeMillis());
-            payload.put("message", "Hello World");
+//            payload.put("message", "Hello World");
 
             // Send back the processed frame
             ResponseData responseData = new ResponseData();

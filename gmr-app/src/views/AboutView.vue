@@ -25,9 +25,8 @@
 <script lang="ts" setup>
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useUserMedia } from '@vueuse/core'
-import { io, Socket } from 'socket.io-client'
+import { useSocketIo } from '@/composables/use-socket-io.ts'
 
-const socket = ref<Socket | null>(null)
 const webcamRef = ref<HTMLVideoElement | null>(null)
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const isProcessing = ref<boolean>(false)
@@ -50,25 +49,15 @@ const { stream, start, stop } = useUserMedia({
   constraints: { video: true, audio: false },
 })
 
+const { socket, initSocket , terminateSocket} = useSocketIo();
+
 onMounted(async () => {
   await start()
   if (stream.value && webcamRef.value) {
     webcamRef.value.srcObject = stream.value
   }
 
-  // Connect to Socket.IO Server
-  // Add these options when creating the socket
-  socket.value = io('http://localhost:9092', {
-    transports: ['websocket'],
-    forceBase64: false, // Force binary transmission
-    // parser: {
-    //   decodeResponse: false, // Prevent auto-parsing
-    // }
-    // perMessageDeflate: {
-    //   threshold: 1024, // Only compress if payload > 1KB
-    //   // level: 6         // Compression level (1-9)
-    // }
-  })
+  await initSocket();
 
   // forceBase64: false, // Critical for binary transfer
   //   parser: {
@@ -88,9 +77,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   stopProcessing()
   stop()
-  if (socket.value) {
-    socket.value.disconnect()
-  }
+  terminateSocket();
 })
 
 const startProcessing = () => {

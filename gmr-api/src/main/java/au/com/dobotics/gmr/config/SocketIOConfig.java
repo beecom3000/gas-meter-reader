@@ -22,6 +22,9 @@ public class SocketIOConfig {
     @Value("${socketio.max.frame.payload.length:65335}")
     private int maxFramePayloadLength;
 
+    @Value("${socketio.max.http.content.length:65335}")
+    private int maxHttpContentLength;
+
     @Bean
     public SocketIOServer socketIOServer() {
         com.corundumstudio.socketio.Configuration config = new com.corundumstudio.socketio.Configuration();
@@ -30,8 +33,8 @@ public class SocketIOConfig {
         config.setOrigin("*");
         // Enable binary support
 //        config.setUseLinuxNativeEpoll(true); // For Linux performance
-        config.setMaxFramePayloadLength(100 * 1024 * 1024); // 100MB
-        config.setMaxHttpContentLength(100 * 1024 * 1024); // 100MB
+        config.setMaxFramePayloadLength(maxFramePayloadLength); // 100MB
+        config.setMaxHttpContentLength(maxHttpContentLength); // 100MB
         SocketIOServer server = new SocketIOServer(config);
 
         server.addConnectListener(client -> log.info("Client connected: {}", client.getSessionId()));
@@ -42,7 +45,7 @@ public class SocketIOConfig {
 
 //    @Bean
     public SocketIONamespace namespace(SocketIOServer server) {
-        SocketIONamespace namespace = server.addNamespace("/api/v1/socket");
+        SocketIONamespace namespace = server.addNamespace("/api/v1/gasfeed");
         namespace.addConnectListener(client -> {
             log.info("Client connected: {}", client.getSessionId());
         });
