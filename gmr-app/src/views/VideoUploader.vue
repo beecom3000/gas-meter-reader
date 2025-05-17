@@ -3,18 +3,29 @@
     <input type="file" accept="video/*" class="file-input" @change="handleFileUpload" />
     <button @click="startProcessing" :disabled="!videoFile">Process Video</button>
     <button @click="stopProcessing" :disabled="!isProcessing">Stop</button>
-    Preview:
-    <video ref="videoRef" controls style="max-width: 100%"></video>
   </div>
+  <div>Preview:</div>
+  <video-player
+    :src="videoSrc"
+    ref="videoPlayerRef"
+    :width="videoDimensions.width"
+    :height="videoDimensions.height"
+    object-fit="cover"
+    @loaded="onVideoLoaded"
+  >
+  </video-player>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useSocketIo } from '@/composables/use-socket-io.ts'
 import { useVideo } from '@/composables/use-video.ts'
+import VideoPlayer from '@/views/VideoPlayer.vue'
+import type { VideoDimensions } from '@/models/video-dimensions.ts'
 
 const videoFile = ref<File>()
-const videoRef = ref<HTMLMediaElement | null>(null);
+const videoPlayerRef = ref<VideoPlayer | null>(null);
+const videoSrc = ref<string>('');
 const isProcessing = ref<boolean>(false)
 const mediaStream = ref<MediaStream | null>(null)
 const trackProcessor = ref<MediaStreamTrackProcessor | null>(null)
@@ -31,7 +42,21 @@ const handleFileUpload = (event: Event) => {
   }
   const file: File = input.files[0];
   videoFile.value = file;
-  (videoRef.value as HTMLMediaElement).src = URL.createObjectURL(file);
+  // videoRef.value.src = URL.createObjectURL(file);
+  videoPlayerRef.value.videoRef.src = URL.createObjectURL(file);
+}
+
+const videoDimensions = ref<VideoDimensions>({
+  width: 800,
+  height: 600
+});
+
+const onVideoLoaded = (dimensions: VideoDimensions) => {
+  console.log('Video loaded:', dimensions);
+  videoDimensions.value = {
+    width: dimensions.width / 2,
+    height: dimensions.height / 2
+  };
 }
 
 const {
@@ -56,8 +81,8 @@ const startProcessing = async () => {
     exifOrientation,
   )
 
-  // Determine if need flip
-  const needFlip = exifOrientation > 4
+  // // Determine if need flip
+  // const needFlip = exifOrientation > 4
 
   initSocket();
   isProcessing.value = true;
@@ -76,7 +101,7 @@ const startProcessing = async () => {
     if ('MediaStreamTrackProcessor' in window) {
       trackProcessor.value = new MediaStreamTrackProcessor({ track: videoTrack })
       const readableStream: ReadableStream = trackProcessor.value.readable
-      readFramesAndSend(needFlip, readableStream);
+      readFramesAndSend(readableStream);
     } else {
       console.error('MediaStreamTrackProcessor not supported in this browser')
       fallbackFrameCapture()
@@ -87,17 +112,23 @@ const startProcessing = async () => {
   }
 }
 
-const extractFrameAsArrayBuffer = async (needFlip: boolean, videoFrame: VideoFrame) => {
+const extractFrameAsArrayBuffer = async (videoFrame: VideoFrame) => {
   // Convert frame to canvas to get image data
   const bitmap: ImageBitmap = await createImageBitmap(videoFrame)
+  console.log(`Width: ${videoFrame.displayWidth}, Height: ${videoFrame.displayHeight}`);
   const canvas = new OffscreenCanvas(videoFrame.displayWidth, videoFrame.displayHeight)
-  const ctx = canvas.getContext('2d');
+  const ctx: OffscreenCanvasRenderingContext2D | null = canvas.getContext('2d');
 
-  // Flip the canvas vertically
-  if (needFlip) {
-    ctx.translate(0, canvas.height);
-    ctx.scale(1, -1);
+  if (!ctx) {
+    console.log('No context found');
+    return;
   }
+
+  // // Flip the canvas vertically
+  // if (needFlip) {
+  //   ctx.translate(0, canvas.height);
+  //   ctx.scale(1, -1);
+  // }
 
   ctx.drawImage(bitmap, 0, 0);
 
@@ -213,6 +244,7 @@ const stopProcessing = () => {
 
 .video-preview {
   max-width: 100%;
+  height: auto;
   margin-top: 20px;
   display: block;
 }
@@ -237,5 +269,18 @@ progress {
   align-items: center;
   gap: 10px;
   margin-bottom: 15px;
+}
+
+.video-wrapper {
+  position: relative;
+  overflow: hidden;
+}
+
+.fixed-video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
 }
 </style>
