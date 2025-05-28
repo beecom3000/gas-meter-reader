@@ -1,7 +1,7 @@
 <template>
-  <div>
-    <button @click="toggleFlip">Toggle Flip</button>
-  </div>
+<!--  <div>-->
+<!--    <button @click="toggleFlip">Toggle Flip</button>-->
+<!--  </div>-->
   <div
     class="video-wrapper"
     :style="{
@@ -71,7 +71,8 @@ const handleMetadataLoaded = () => {
       width: videoRef.value.videoWidth,
       height: videoRef.value.videoHeight
     };
-    console.log('Native video dimensions:', dimensions.value);
+    console.log('Native video dimensions:', JSON.stringify(dimensions.value));
+
     emit('loaded', dimensions.value);
   }
 };

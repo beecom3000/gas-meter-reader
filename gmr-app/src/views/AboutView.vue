@@ -4,7 +4,7 @@
       <h2>Real-time Gas Meter Reading</h2>
       <video ref="webcamRef" class="webcam" autoplay playsinline muted></video>
       <canvas
-        ref="canvasRef"
+        ref="previewCanvas"
         :width="canvasWidth"
         :height="canvasHeight"
       ></canvas>
@@ -26,16 +26,16 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useUserMedia } from '@vueuse/core'
 import { useSocketIo } from '@/composables/use-socket-io.ts'
+import type { Metadata } from '@/models/metadata.ts'
+import { useVideoMedia } from '@/composables/use-video-media.ts'
 
 const webcamRef = ref<HTMLVideoElement | null>(null)
-const canvasRef = ref<HTMLCanvasElement | null>(null)
 const isProcessing = ref<boolean>(false)
 const processingInterval = ref<number | null>(null)
 
 const canvasWidth = ref<number>(640)
 const canvasHeight = ref<number>(480)
 
-const currentFPS = ref<number>(0)
 const processingLatency = ref<number>(0)
 
 const startButtonClass = ref<string>('button-enabled')
@@ -43,13 +43,12 @@ const stopButtonClass = ref<string>('button-disabled')
 
 const systemMessage = ref<string>('None')
 
-const frameTimes = ref<number[]>([])
-
 const { stream, start, stop } = useUserMedia({
   constraints: { video: true, audio: false },
 })
 
 const { socket, initSocket , terminateSocket} = useSocketIo();
+const { previewCanvas, currentFPS, handleResponse } = useVideoMedia();
 
 onMounted(async () => {
   await start()
@@ -57,14 +56,16 @@ onMounted(async () => {
     webcamRef.value.srcObject = stream.value
   }
 
-  await initSocket();
+  await initSocket('localhost', 9092, 'api/v1/face', false);
 
   // forceBase64: false, // Critical for binary transfer
   //   parser: {
   //   decodeResponse: false // Prevent auto-parsing
   // }
   // socket.value.emit('test-load', 'Hello From The Client');
-  socket.value.on('processed-frame', handleResponse)
+  socket.value.on('processed-frame', (metadata: Metadata, data: ArrayBuffer) => {
+    handleResponse(metadata, data);
+  })
   // socket.value.on('test-frame', (metadata, data) => {
   //   const uint8Array = new Uint8Array(data.slice(1))
   //   const isJpg = isJpeg(uint8Array);
@@ -84,16 +85,16 @@ const startProcessing = () => {
   if (isProcessing.value) return
 
   isProcessing.value = true
-  const canvas = canvasRef.value!
+  const canvas1 = previewCanvas.value!
   const webcam = webcamRef.value!
 
   // Set canvas dimensions to match video
-  canvas.width = webcam.videoWidth
-  canvas.height = webcam.videoHeight
+  canvas1.width = webcam.videoWidth
+  canvas1.height = webcam.videoHeight
 
   // Send frames at 15fps (adjust as needed)
   processingInterval.value = setInterval(() => {
-    captureAndSendFrame()
+    captureAndSendFrame(canvas1)
   }, 66) // ~15fps
 
   stopButtonClass.value = 'button-enabled'
@@ -118,8 +119,7 @@ const assert = <T,>(obj: T | null, message: string) => {
   }
 }
 
-const captureAndSendFrame = () => {
-  const canvas: HTMLCanvasElement | null = canvasRef.value
+const captureAndSendFrame = (canvas: HTMLCanvasElement) => {
   const video = webcamRef.value!
 
   assert<HTMLCanvasElement>(canvas, 'Could not get canvas element')
@@ -161,19 +161,6 @@ interface ResponseData {
   timestamp: number
 }
 
-// Calculate current FPS
-const calculateFPS = () => {
-  if (frameTimes.value.length < 2) {
-    currentFPS.value = 0
-    return
-  }
-
-  const first = frameTimes.value[0]
-  const last = frameTimes.value[frameTimes.value.length - 1]
-  const averageInterval = (last - first) / (frameTimes.value.length - 1)
-  currentFPS.value = 1000 / averageInterval
-}
-
 const isJpeg = (buffer: Uint8Array) => {
   if (!buffer || buffer.length < 3) {
     return false
@@ -183,85 +170,6 @@ const isJpeg = (buffer: Uint8Array) => {
   // return uint8Array[0] === 0xFF && uint8Array[1] === 0xD8 && uint8Array[2] === 0xFF;
 }
 
-const renderImage = (metadata, uint8Array: Uint8Array) => {
-  // Create image from binary data
-  const blob = new Blob([uint8Array], { type: 'image/jpeg' })
-  const url = URL.createObjectURL(blob)
-
-  const img = new Image()
-  // img.crossOrigin = 'anonymous';
-
-  // new Promise<void>((resolve, reject) => {
-  img.onload = () => {
-    const canvas = canvasRef.value!
-    const ctx = canvas.getContext('2d')!
-
-    // Ensure canvas matches image dimensions
-    if (canvas.width !== metadata.width || canvas.height !== metadata.height) {
-      canvas.width = metadata.width
-      canvas.height = metadata.height
-    }
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    ctx.drawImage(img, 0, 0)
-    URL.revokeObjectURL(url)
-    // resolve();
-  }
-
-  img.onerror = (error: Event | string) => {
-    console.error('Image load failed: ', error)
-    URL.revokeObjectURL(url)
-    // reject(new Error('Image load failed: ' + error));
-  }
-
-  img.src = url
-  return url
-}
-
-interface Metadata {
-  message: string;
-  width: number;
-  height: number;
-  timestamp: number;
-}
-
-const handleResponse = async (metadata: Metadata, data: ArrayBuffer) => {
-  // 1. Verify we received binary data
-  if (!(data instanceof ArrayBuffer)) {
-    console.error('Expected ArrayBuffer, got:', typeof data)
-    return
-  }
-  const uint8Array = new Uint8Array(data.slice(1))
-  // const uint8Array = new Uint8Array(data);
-
-  // 2. Log received data details
-  // console.log(`Client received - Size: ${uint8Array.length} bytes`)
-  // console.log('Header:',
-  //   Array.from(uint8Array.slice(0, 4))
-  //     .map((b) => b.toString(16).padStart(2, '0'))
-  //     .join(' '),
-  // )
-
-  // 3. Verify JPEG signature
-  if (uint8Array.length < 2 || uint8Array[0] !== 0xff || uint8Array[1] !== 0xd8) {
-    console.error(
-      'Invalid JPEG signature:',
-      Array.from(uint8Array.slice(0, 3)).map((b) => b.toString(16)),
-    )
-    return
-  }
-
-  const canvas = canvasRef.value!
-  assert(canvas, 'Could not get canvas reference')
-
-  // Calculate FPS
-  calculateFPS()
-
-  // console.log('Message: ', metadata.message)
-
-  const url = renderImage(metadata, uint8Array)
-  // processedFrameUrl.value = url
-}
 </script>
 
 <style scoped>

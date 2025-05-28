@@ -6,13 +6,17 @@ export const useSocketIo = () => {
   const socket = ref<Socket | null>(null);
 
   // Initialize Socket.IO connection
-  const initSocket = (hostname: string = 'localhost', port: number = 9092, secure: boolean = false) => {
+  const initSocket = async (hostname: string = 'localhost', port: number = 9092, namespace: string = '', secure: boolean = false) => {
 
     const protocol = secure ? 'https' : 'http';
 
+    const url = `${protocol}://${hostname}:${port}/${namespace}`;
+
+    console.log(`[Socket.io] Connecting to ${url}`);
+
     // Connect to Socket.IO Server
     // Add these options when creating the socket
-    socket.value = io(`${protocol}://${hostname}:${port}`, {
+    socket.value = io(url, {
       transports: ['websocket'],
       forceBase64: false, // Force binary transmission
       reconnection: true,

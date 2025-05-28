@@ -1,11 +1,14 @@
-package au.com.dobotics.gmr.handler;
+package au.com.dobotics.gmr.socketio.handler;
 
 import au.com.dobotics.gmr.model.FrameData;
-import au.com.dobotics.gmr.model.ResponseData;
 import au.com.dobotics.gmr.validator.JpegValidator;
 import com.corundumstudio.socketio.AckRequest;
 import com.corundumstudio.socketio.SocketIOClient;
+import com.corundumstudio.socketio.SocketIONamespace;
 import com.corundumstudio.socketio.SocketIOServer;
+import com.corundumstudio.socketio.annotation.OnConnect;
+import com.corundumstudio.socketio.annotation.OnDisconnect;
+import com.corundumstudio.socketio.annotation.OnEvent;
 import com.corundumstudio.socketio.listener.DataListener;
 import com.corundumstudio.socketio.protocol.Packet;
 import com.corundumstudio.socketio.protocol.PacketType;
@@ -15,10 +18,7 @@ import org.bytedeco.javacpp.BytePointer;
 import org.bytedeco.javacpp.IntPointer;
 import org.bytedeco.opencv.opencv_core.*;
 import org.bytedeco.opencv.opencv_objdetect.CascadeClassifier;
-import org.opencv.core.MatOfByte;
-import org.opencv.core.MatOfInt;
-import org.opencv.core.MatOfRect;
-import org.opencv.imgcodecs.Imgcodecs;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -27,7 +27,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectOutputStream;
 import java.nio.ByteBuffer;
-import java.nio.IntBuffer;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -37,21 +36,46 @@ import static org.bytedeco.opencv.global.opencv_imgproc.rectangle;
 
 @Slf4j
 @Component
-public class SocketIOEventHandler {
+public class FaceDetectionEventHandler {
+
+    public static final String NAMESPACE = "/api/v1/face";
 
     public static final String JPEG_EXTENSION = ".jpg";
     public static final String FRAME_EVENT = "frame";
     public static final String PROCESSED_FRAME_EVENT = "processed-frame";
 
     private final SocketIOServer server;
+    private SocketIONamespace namespace;
     private final CascadeClassifier faceDetector;
     private final JpegValidator jpegValidator;
 
     @Autowired
-    public SocketIOEventHandler(SocketIOServer server, CascadeClassifier cascadeClassifier, JpegValidator jpegValidator) {
+    public FaceDetectionEventHandler(SocketIOServer server, CascadeClassifier cascadeClassifier, JpegValidator jpegValidator) {
         this.server = server;
         this.faceDetector = cascadeClassifier;
         this.jpegValidator = jpegValidator;
+    }
+
+    @PostConstruct
+    public void init() {
+        log.info("Socket.io adding namespace: {}", NAMESPACE);
+        this.namespace = server.addNamespace(NAMESPACE);
+//        this.namespace.addConnectListener(client -> log.info("Client connected: {}", client.getSessionId()));
+//        this.namespace.addDisconnectListener(client -> log.info("Client disconnected: {}", client.getSessionId()));
+//        this.namespace.addEventListener(FRAME_EVENT, FrameData.class, onFrameReceived());
+//        this.namespace.addEventListener("test-load", String.class, onTestLoaded());
+//        this.namespace.addEventListener(FRAME_EVENT, FrameData.class, onFrameReceived());
+        log.info("Socket.io server started");
+    }
+
+    @OnConnect
+    public void onConnect(SocketIOClient client) {
+        log.info("Client connected to {}: {}", NAMESPACE, client.getSessionId());
+    }
+
+    @OnDisconnect
+    public void onDisconnect(SocketIOClient client) {
+        log.info("Client disconnected from {}: {}", NAMESPACE, client.getSessionId());
     }
 
     // Helper method to print byte headers
@@ -85,43 +109,48 @@ public class SocketIOEventHandler {
         };
     };
 
+    @OnEvent(FRAME_EVENT)
+    public void onFrameReceived(SocketIOClient client, FrameData data, AckRequest ackRequest) {
+        detectFaces(client, data);
+    }
+
     public DataListener<FrameData> onFrameReceived() {
         return (SocketIOClient client, FrameData data, AckRequest ackRequest) -> {
 //            log.debug("Data: {}", data);
+            detectFaces(client, data);
+        };
+    }
 
-            if (data == null || data.getFrame() == null) {
-                client.sendEvent("error", "Invalid frame data");
-                return;
-            }
+    private void detectFaces(SocketIOClient client, FrameData data) {
+        if (data == null || data.getFrame() == null) {
+            client.sendEvent("error", "Invalid frame data");
+            return;
+        }
 
-            byte[] frame = data.getFrame();
-            int width = data.getWidth();
-            int height = data.getHeight();
+        byte[] frame = data.getFrame();
+        int width = data.getWidth();
+        int height = data.getHeight();
 
-            // process frame
-            byte[] processedFrame = processFrame(frame, width, height);
+        // process frame
+        byte[] processedFrame = processFrame(frame, width, height);
 
-            boolean isJpeg = jpegValidator.isJpeg(processedFrame);
-            assert isJpeg : "processed frame is not jpeg";
+        boolean isJpeg = jpegValidator.isJpeg(processedFrame);
+        assert isJpeg : "processed frame is not jpeg";
 
-            // Verify before sending
-            log.debug("Server sending JPEG - Size: {} byte(s)", processedFrame.length);
-            log.debug("Header: " + bytesToHex(processedFrame, 4));
+        // Verify before sending
+//        log.debug("Server sending JPEG - Size: {} byte(s)", processedFrame.length);
+//        log.debug("Header: " + bytesToHex(processedFrame, 4));
 
-            // Send with explicit binary attachment
-            Map<String, Object> payload = new HashMap<>();
-            payload.put("width", width);
-            payload.put("height", height);
-            payload.put("timestamp", System.currentTimeMillis());
+        // Send with explicit binary attachment
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("width", width);
+        payload.put("height", height);
+        payload.put("timestamp", System.currentTimeMillis());
 //            payload.put("message", "Hello World");
 
-            // Send back the processed frame
-            ResponseData responseData = new ResponseData();
-            int numOfBytes = processedFrame.length;
-            responseData.setFrame(processedFrame);
-            responseData.setTimestamp(System.currentTimeMillis());
-            client.sendEvent("processed-frame", payload, processedFrame);
-        };
+        // Send back the processed frame
+        int numOfBytes = processedFrame.length;
+        client.sendEvent("processed-frame", payload, processedFrame);
     }
 
     public byte[] serialize(Object obj) throws IOException {
@@ -176,17 +205,6 @@ public class SocketIOEventHandler {
         encodedImage.get(arr);
         return arr;
     }
-
-
-    @PostConstruct
-    public void init() {
-        log.info("Socket.io server is starting");
-        this.server.addEventListener(FRAME_EVENT, FrameData.class, onFrameReceived());
-        this.server.addEventListener("test-load", String.class, onTestLoaded());
-        log.info("Socket.io server started");
-    }
-
-
 
 //    // In Java backend:
 //    byte[] testImage = Files.readAllBytes(Paths.get("known-good.jpg"));

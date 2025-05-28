@@ -1,7 +1,9 @@
 package au.com.dobotics.gmr.config;
 
+import au.com.dobotics.gmr.socketio.ExtendedSpringAnnotationScanner;
 import com.corundumstudio.socketio.SocketIONamespace;
 import com.corundumstudio.socketio.SocketIOServer;
+import com.corundumstudio.socketio.annotation.SpringAnnotationScanner;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -31,14 +33,18 @@ public class SocketIOConfig {
         config.setHostname(this.hostname);
         config.setPort(this.port);
         config.setOrigin("*");
+
+//        // Enable multiple namespace support
+//        config.setAuthorizationListener(data -> true); // Add your auth logic here
+
         // Enable binary support
 //        config.setUseLinuxNativeEpoll(true); // For Linux performance
         config.setMaxFramePayloadLength(maxFramePayloadLength); // 100MB
         config.setMaxHttpContentLength(maxHttpContentLength); // 100MB
         SocketIOServer server = new SocketIOServer(config);
 
-        server.addConnectListener(client -> log.info("Client connected: {}", client.getSessionId()));
-        server.addDisconnectListener(client -> log.info("Client disconnected: {}", client.getSessionId()));
+//        server.addConnectListener(client -> log.info("Client connected: {}", client.getSessionId()));
+//        server.addDisconnectListener(client -> log.info("Client disconnected: {}", client.getSessionId()));
         return server;
     }
 
@@ -50,6 +56,11 @@ public class SocketIOConfig {
             log.info("Client connected: {}", client.getSessionId());
         });
         return namespace;
+    }
+
+    @Bean
+    public SpringAnnotationScanner springAnnotationScanner(SocketIOServer socketServer) {
+        return new ExtendedSpringAnnotationScanner(socketServer);
     }
 
 }
