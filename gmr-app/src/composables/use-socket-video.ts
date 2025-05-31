@@ -81,6 +81,10 @@ export function useSocketVideo() {
       const canvas: HTMLCanvasElement = document.createElement('canvas')
       const ctx: CanvasRenderingContext2D | null = canvas.getContext('2d')
 
+      /**
+       * Seeked event occurs when the user is finished moving/skipping to a new position in the audio/video
+       */
+      // 'seeked' is fired when the seek operation completes
       video.addEventListener('seeked', async () => {
         canvas.width = video.videoWidth
         canvas.height = video.videoHeight
@@ -96,13 +100,14 @@ export function useSocketVideo() {
           reader.readAsArrayBuffer(blob)
         })
 
-        // socket.value.emit('feed', arrayBuffer)
-        socket.value.emit('feed', {
-          frame: arrayBuffer,
-          width: video.videoWidth,
-          height: video.videoHeight,
-          timestamp: performance.now(),
-        })
+        if (socket.value) {
+          socket.value.emit('feed', {
+            frame: arrayBuffer,
+            width: video.videoWidth,
+            height: video.videoHeight,
+            timestamp: performance.now(),
+          })
+        }
       })
 
       // Process frame by frame

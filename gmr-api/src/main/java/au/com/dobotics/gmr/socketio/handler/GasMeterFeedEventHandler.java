@@ -140,26 +140,6 @@ public class GasMeterFeedEventHandler {
     }
 
     private byte[] process(ProcessingStage stage, byte[] rawData, int width, int height) {
-//
-//        try {
-//            BufferedImage bufferedImage = ImageIO.read(new ByteArrayInputStream(rawData));
-//            Frame frame = Java2DFrameUtils
-//
-//            // Convert Frame to OpenCV Mat
-//            try (OpenCVFrameConverter.ToMat converter = new OpenCVFrameConverter.ToMat()) {
-//                return converter.convert(frame);
-//            }
-//
-//        } catch (IOException e) {
-//            throw new RuntimeException(e);
-//        }
-//        Mat mat = opencv_imgcodecs.imdecode(bytePointer.asBuffer(), opencv_imgcodecs.IMREAD_UNCHANGED);
-
-//        Here's how to convert a JPEG byte array to an OpenCV Mat image using JavaCPP:
-
-//        BytePointer data = new BytePointer(rawData);
-//        try (Mat frame = new Mat(height, width, CvType.CV_8UC1, data)) {
-//        try (Mat frame = new Mat(rawData)) {
         try (Mat frame = opencv_imgcodecs.imdecode(new Mat(rawData), IMREAD_UNCHANGED)) {
 
             if (frame.empty()) {
