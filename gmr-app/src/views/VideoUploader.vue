@@ -229,7 +229,6 @@ const readFramesAndSend = async (readableStream: ReadableStream<VideoFrame>) => 
 
       // Send to server
       if (socket.value && socket.value.connected) {
-        console.debug('Image length: ', arrayBuffer.byteLength)
         socket.value.emit('feed', {
           frame: arrayBuffer,
           width: videoFrame.displayWidth,

@@ -2,7 +2,7 @@ package au.com.dobotics.gmr.socketio.handler;
 
 import au.com.dobotics.gmr.model.FrameData;
 import au.com.dobotics.gmr.model.ProcessingStage;
-import au.com.dobotics.gmr.processor.ImageProcessor;
+import au.com.dobotics.gmr.processor.GrayscaleImageProcessorImpl;
 import com.corundumstudio.socketio.AckRequest;
 import com.corundumstudio.socketio.SocketIOClient;
 import com.corundumstudio.socketio.annotation.OnConnect;
@@ -17,19 +17,12 @@ import org.bytedeco.opencv.global.opencv_imgproc;
 import org.bytedeco.opencv.opencv_core.*;
 import org.bytedeco.opencv.opencv_core.Point;
 import org.bytedeco.opencv.opencv_imgproc.Vec4iVector;
-import org.opencv.core.CvType;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import javax.imageio.ImageIO;
-import java.awt.*;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.bytedeco.opencv.global.opencv_imgcodecs.*;
@@ -45,23 +38,32 @@ public class GasMeterFeedEventHandler {
     int MIN_LINE_LENGTH = 50;     // Min needle length (pixels)
     int MAX_LINE_GAP = 10;        // Max gap in line segments
 
-    private final ImageProcessor imageProcessor;
+    private final GrayscaleImageProcessorImpl grayscaleImageProcessorImpl;
 
-    private final Map<String, Set<ProcessingStage>> clientStages = new ConcurrentHashMap<>();
+    private final Map<String, ProcessingStage> clientStages;
+    private final Map<String, Boolean> processingFlags;
 
     @Autowired
-    public GasMeterFeedEventHandler(ImageProcessor imageProcessor) {
-        this.imageProcessor = imageProcessor;
+    public GasMeterFeedEventHandler(GrayscaleImageProcessorImpl grayscaleImageProcessorImpl) {
+        this.grayscaleImageProcessorImpl = grayscaleImageProcessorImpl;
+        this.clientStages = new ConcurrentHashMap<>();
+        this.processingFlags = new ConcurrentHashMap<>();
     }
 
     @OnConnect
     public void onConnect(SocketIOClient client) {
-        log.info("Client connected to {}: {}", NAMESPACE, client.getSessionId());
+        String sessionId = client.getSessionId().toString();
+        clientStages.put(sessionId, ProcessingStage.ORIGINAL);
+        processingFlags.put(sessionId, false);
+        log.info("Client connected to {}: {}", NAMESPACE, sessionId);
     }
 
     @OnDisconnect
     public void onDisconnect(SocketIOClient client) {
-        log.info("Client disconnected from {}: {}", NAMESPACE, client.getSessionId());
+        String sessionId = client.getSessionId().toString();
+        clientStages.remove(sessionId);
+        processingFlags.remove(sessionId);
+        log.info("Client disconnected from {}: {}", NAMESPACE, sessionId);
     }
 
     static class Result {
@@ -71,21 +73,57 @@ public class GasMeterFeedEventHandler {
         public byte[] data;
     }
 
+    @OnEvent("stage-change")
+    public void onStageChange(SocketIOClient client, String stage, AckRequest ackRequest) {
+        ProcessingStage processingStage = ProcessingStage.valueOf(stage.toUpperCase());
+        String sessionId = client.getSessionId().toString();
+        if (isValidStage(stage)) {
+            clientStages.put(sessionId, processingStage);
+        }
+    }
+
+    private boolean isValidStage(String stage) {
+        return stage != null && (ProcessingStage.valueOf(stage.toUpperCase()) != null);
+    }
+
+    @OnEvent("processing-complete")
+    public void onProcessingComplete(SocketIOClient client, Void data, AckRequest ackRequest) {
+        String sessionId = client.getSessionId().toString();
+        processingFlags.put(sessionId, false);
+        client.sendEvent("processing-complete");
+    }
+
+    @OnEvent("processing-cancelled")
+    public void onProcessingCancelled(SocketIOClient client, Void data, AckRequest ackRequest) {
+        String sessionId = client.getSessionId().toString();
+        processingFlags.put(sessionId, false);
+    }
+
+    @OnEvent("processing-start")
+    public void onProcessingStart(SocketIOClient client, Void data, AckRequest ackRequest) {
+        String sessionId = client.getSessionId().toString();
+        processingFlags.put(sessionId, true);
+    }
+
     @OnEvent("feed")
-    public void onDataFeed(SocketIOClient client, FrameData data, AckRequest ackRequest) {
+    public void onFeed(SocketIOClient client, FrameData data, AckRequest ackRequest) {
         if (data == null || data.getFrame() == null) {
             client.sendEvent("error", "Data is empty or null");
             return;
         }
 
         String sessionId = client.getSessionId().toString();
-        Set<ProcessingStage> stages = clientStages.getOrDefault(sessionId, Set.of(ProcessingStage.FINAL));
+        ProcessingStage stage = clientStages.getOrDefault(sessionId, ProcessingStage.FINAL);
+        // Check if processing was cancelled
+        if (Boolean.FALSE.equals(processingFlags.get(sessionId))) {
+            return;
+        }
 
         byte[] frame = data.getFrame();
         int width = data.getWidth();
         int height = data.getHeight();
 
-        byte[] processedData = process(stages, frame, width, height);
+        byte[] processedFrame = process(stage, frame, width, height);
 
         // validate jpeg
 //        boolean isJpeg = jpegValidator.isJpeg(processedFrame);
@@ -96,13 +134,12 @@ public class GasMeterFeedEventHandler {
         metadata.put("width", width);
         metadata.put("height", height);
         metadata.put("timestamp", System.currentTimeMillis());
-        metadata.put("status", "");
 
         // Send back the processed frame
-        client.sendEvent("processed-frame", metadata, processedData);
+        client.sendEvent("processed-frame", metadata, processedFrame);
     }
 
-    private byte[] process(Set<ProcessingStage> stages, byte[] rawData, int width, int height) {
+    private byte[] process(ProcessingStage stage, byte[] rawData, int width, int height) {
 //
 //        try {
 //            BufferedImage bufferedImage = ImageIO.read(new ByteArrayInputStream(rawData));
@@ -131,8 +168,8 @@ public class GasMeterFeedEventHandler {
             }
 
             // Process the frame (e.g. blur, motion detection, etc.)
-            try (Mat processedFrame = processFrame(stages, frame, width, height)) {
-                printImageInfo(processedFrame);
+            try (Mat processedFrame = processFrame(stage, frame, width, height)) {
+//                printImageInfo(processedFrame);
                 // Convert back to byte array (JPEG)
                 Result result = new Result();
 //            result.data = toArray(processedFrame);
@@ -169,9 +206,13 @@ public class GasMeterFeedEventHandler {
         return outPointer.asByteBuffer();
     }
 
-    private Mat processFrame(Set<ProcessingStage> stages, Mat frame, int width, int height) {
+    private Mat processFrame(ProcessingStage stage, Mat frame, int width, int height) {
 
-        boolean sendFinal = stages.contains(ProcessingStage.FINAL);
+        boolean sendFinal = stage == ProcessingStage.FINAL;
+
+        if (ProcessingStage.ORIGINAL == stage) {
+            return frame;
+        }
 
         Mat blurred = new Mat();
         Mat gray = null;
@@ -185,10 +226,17 @@ public class GasMeterFeedEventHandler {
             boolean trackingActive = true;
 
             // 1. Preprocess (grayscale + blur)
-            if (stages.contains(ProcessingStage.GRAYSCALE)) {
-                gray = imageProcessor.applyGrayscale(frame);
+            gray = grayscaleImageProcessorImpl.process(frame);
+
+            if (ProcessingStage.GRAYSCALE == stage) {
+                return gray;
             }
+
             opencv_imgproc.GaussianBlur(gray, blurred, new Size(5, 5), 0);
+
+            if (ProcessingStage.BLUR == stage) {
+                return blurred;
+            }
 
             // 2. Motion detection (compared with the previous frame)
             if (!prevFrame.empty()) {
@@ -208,10 +256,14 @@ public class GasMeterFeedEventHandler {
 //                    Mat lines = new Mat();
                 Vec4iVector lines = new Vec4iVector();
                 opencv_imgproc.HoughLinesP(
-                        edges, lines, 1, Math.PI / 180, 50,
-                        MIN_LINE_LENGTH, MAX_LINE_GAP
+                        edges,
+                        lines,
+                        1,
+                        Math.PI / 180,
+                        50,
+                        MIN_LINE_LENGTH,
+                        MAX_LINE_GAP
                 );
-
 
                 // 5. Find the longest line near the center (needle)
                 Point center = new Point(frame.cols() / 2, frame.rows() / 2);
