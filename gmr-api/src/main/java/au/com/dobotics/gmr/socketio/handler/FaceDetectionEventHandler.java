@@ -65,7 +65,7 @@ public class FaceDetectionEventHandler {
 //        this.namespace.addEventListener(FRAME_EVENT, FrameData.class, onFrameReceived());
 //        this.namespace.addEventListener("test-load", String.class, onTestLoaded());
 //        this.namespace.addEventListener(FRAME_EVENT, FrameData.class, onFrameReceived());
-        log.info("Socket.io server started");
+        log.info("Socket.io namespace added.");
     }
 
     @OnConnect

@@ -25,10 +25,10 @@ public class ExtendedSpringAnnotationScanner extends SpringAnnotationScanner {
         Class originalBeanClass = (Class) ReflectionUtils.getField(field, this);
         if (originalBeanClass != null) {
             super.postProcessAfterInitialization(bean, beanName);
-            Collection<SocketIONamespace> allNamespaces = this.socketIOServer.getAllNamespaces();
-            for (SocketIONamespace namespace : allNamespaces) {
-                namespace.addListeners(bean, bean.getClass());
-            }
+//            Collection<SocketIONamespace> allNamespaces = this.socketIOServer.getAllNamespaces();
+//            for (SocketIONamespace namespace : allNamespaces) {
+//                namespace.addListeners(bean, bean.getClass());
+//            }
         }
         return bean;
     }

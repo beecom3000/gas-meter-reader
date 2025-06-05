@@ -8,4 +8,8 @@ public enum ProcessingStage {
     DIGIT_DETECTION,
     OCR,
     FINAL;
+
+    public boolean is(ProcessingStage stage) {
+        return this == stage;
+    }
 }

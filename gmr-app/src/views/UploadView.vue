@@ -2,19 +2,21 @@
   <div class="video-processor">
     <div class="row">
       <div class="col-5">
-        <div class="file-upload">
+        <div class="row q-pb-md">
           <input type="file" accept="video/*" @change="handleFileUpload">
+        </div>
+        <div class="row q-pa-md">
           <video ref="videoPreview" controls muted v-if="videoFile" style="max-width: 100%"></video>
         </div>
       </div>
-      <div class="col-2">
+      <div class="col-2 q-pa-md">
         <div class="row">
-          <div class="controls">
+          <div class="controls q-pb-sm">
             <button
               @click="processVideo"
               :disabled="!isConnected || !videoFile || isProcessing"
             >
-              Process Video
+              Process
             </button>
             <button
               @click="cancelProcessing"
@@ -36,22 +38,21 @@
           <div class="stage-controls" v-show="videoFile">
             <h6>Processing Stage:</h6>
             <div v-for="stage in stages" :key="stage.value" class="radio-option">
-              <input
-                type="radio"
-                :id="stage.value"
-                :value="stage.value"
+              <q-radio
+                :id="stage.id"
+                :val="stage.value"
                 v-model="currentStage"
-                @change="setStage(currentStage)"
-              >
-              <label :for="stage.value">{{ stage.label }}</label>
+                @update:model-value="updateStage"
+                :label="stage.label"
+              />
             </div>
           </div>
         </div>
       </div>
       <div class="col-5">
         <div class="output">
-          <h5>Preview stage ({{ currentStage }})</h5>
-          <canvas ref="outputCanvas"></canvas>
+          <h5 class="q-pb-md">Preview stage ({{ currentStage }})</h5>
+          <canvas class="q-pa-md" ref="outputCanvas"></canvas>
         </div>
       </div>
     </div>
@@ -59,16 +60,17 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { useSocketVideo } from '@/composables/use-socket-video.ts'
 import type { Metadata } from '@/models/metadata.ts'
 
 const {
   connect,
   sendVideo,
-  setStage,
+  updateStage,
   registerProcessor,
   cancelProcessing,
+  disconnect,
   isConnected,
   currentStage,
   processingProgress,
@@ -76,15 +78,15 @@ const {
 } = useSocketVideo()
 
 const videoFile = ref<File | null>(null)
-const videoPreview = ref<HTMLVideoElement | null>(null)
+const videoPreview = ref<HTMLMediaElement | null>(null)
 const outputCanvas = ref<HTMLCanvasElement | null>(null)
 
 const stages = [
-  { value: 'original', label: 'Original (No Processing)' },
-  { value: 'grayscale', label: 'Grayscale' },
-  { value: 'blur', label: 'Blur' },
-  { value: 'canny_edge', label: 'Canny Edge' },
-  { value: 'detection', label: 'Object Detection' }
+  { id: 'original', value: 'original', label: 'Original (No Processing)' },
+  { id: 'grayscale', value: 'grayscale', label: 'Grayscale' },
+  { id: 'blur', value: 'blur', label: 'Blur' },
+  { id: 'canny_edge', value: 'canny_edge', label: 'Canny Edge' },
+  { id: 'detection', value: 'detection', label: 'Object Detection' }
 ]
 
 // Initialize
@@ -94,6 +96,11 @@ onMounted(() => {
   registerProcessor((metadata: Metadata, data: ArrayBuffer) => {
     displayFrame(metadata, data)
   })
+})
+
+onUnmounted(() => {
+  cancelProcessing()
+  disconnect()
 })
 
 const displayFrame = (metadata: Metadata, data: ArrayBuffer) => {
@@ -137,8 +144,12 @@ const handleFileUpload = (event: Event) => {
 }
 
 const processVideo = async () => {
-  if (!videoFile.value) return
-  await sendVideo(videoFile.value)
+  if (videoFile.value && videoPreview.value) {
+    isProcessing.value = true;
+    const mediaElement: HTMLMediaElement = (videoPreview.value as HTMLMediaElement);
+    const stream: MediaStream = mediaElement.captureStream()
+    await sendVideo(stream)
+  }
 }
 </script>
 

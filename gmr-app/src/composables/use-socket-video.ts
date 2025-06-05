@@ -1,7 +1,9 @@
 import { io, Socket } from 'socket.io-client'
-import { ref, onUnmounted } from 'vue'
+import { ref } from 'vue'
 import type { ProcessingCallback } from '@/models/processing-callback.ts'
 import type { Metadata } from '@/models/metadata.ts'
+
+declare const MediaStreamTrackProcessor: any;
 
 export type Stage = 'original' | 'grayscale' | 'blur' | 'detection' | 'final'
 
@@ -11,6 +13,9 @@ export function useSocketVideo() {
   const currentStage = ref<Stage>('original')
   const processingProgress = ref<number>(0)
   const isProcessing = ref<boolean>(false)
+  const mediaStream = ref<MediaStream | null>(null)
+  const trackProcessor = ref<InstanceType<typeof MediaStreamTrackProcessor> | null>(null)
+  const reader = ref<ReadableStreamReader<VideoFrame> | null>(null)
 
   const connect = (hostname: string = 'localhost', port: number = 9092, namespace: string = '', secure: boolean = false) => {
     const protocol = secure ? 'https' : 'http';
@@ -49,6 +54,18 @@ export function useSocketVideo() {
     socket.value.on('processing-complete', () => {
       isProcessing.value = false
     })
+
+    socket.value.on('stage-change-completed', (newStage: Stage) => {
+      currentStage.value = newStage;
+    })
+  }
+
+  const disconnect = () => {
+    cancelProcessing()
+    stopProcessing()
+    if (socket.value) {
+      socket.value.disconnect()
+    }
   }
 
   const processor = ref<ProcessingCallback | null>(null)
@@ -57,128 +74,168 @@ export function useSocketVideo() {
     processor.value = callback
   }
 
-  const updateStage = (): void => {
-    if (isConnected.value && socket.value && currentStage.value) {
-      socket.value.emit('stage-change', currentStage.value)
+  const updateStage = (stage: Stage = 'original'): void => {
+    if (isConnected.value && socket.value) {
+      socket.value.emit('stage-change', stage)
     }
   }
 
-  const setStage = (stage: Stage) => {
-    currentStage.value = stage
-    updateStage()
+  const sendVideo = async (stream: MediaStream) => {
+    try {
+      if (socket.value) {
+        socket.value.emit('processing-start')
+        isProcessing.value = true
+      }
+      // Create a MediaStream from the video file
+      mediaStream.value = stream
+
+      // Get video track
+      const videoTrack: MediaStreamTrack = stream.getVideoTracks()[0]
+
+      // Create a MediaStreamTrackProcessor to read frames
+      // Note: The MediaStreamTrackProcessor interface of the Insertable Streams for MediaStreamTrack API
+      // consumes a video MediaStreamTrack object's source and generates a stream of VideoFrame objects.
+      if ('MediaStreamTrackProcessor' in window) {
+        trackProcessor.value = new MediaStreamTrackProcessor({ track: videoTrack })
+        const readableStream: ReadableStream = trackProcessor.value.readable
+        readFramesAndSend(readableStream)
+      } else {
+        console.error('MediaStreamTrackProcessor not supported in this browser')
+        fallbackFrameCapture()
+      }
+    } catch (error) {
+      console.error('Error processing video:', error)
+      isProcessing.value = false
+    }
   }
 
-  const sendVideo = async (file: File): Promise<boolean> => {
-    if (!isConnected.value || !file) return false
-    socket.value.emit('processing-start')
+  const fallbackFrameCapture = () => {
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+    canvas.width = videoPreview.value!.videoWidth
+    canvas.height = videoPreview.value!.videoHeight
 
-    isProcessing.value = true
-    processingProgress.value = 0
+    const captureInterval = setInterval(() => {
+      if (!isProcessing.value) {
+        clearInterval(captureInterval)
+        return
+      }
 
+      ctx.drawImage(videoPreview.value, 0, 0, canvas.width, canvas.height)
+
+      canvas.toBlob(
+        async (blob: Blob) => {
+          const arrayBuffer = await blob.arrayBuffer()
+
+          if (socket.value && socket.value.connected) {
+            socket.value.emit('video-frame', {
+              frameData: arrayBuffer,
+              width: canvas.width,
+              height: canvas.height,
+              timestamp: performance.now(),
+            })
+          }
+        },
+        'image/jpeg',
+        0.8,
+      )
+    }, 1000 / 30) // 30 FPS
+  }
+
+// Read frames and send to server
+  const readFramesAndSend = async (readableStream: ReadableStream<VideoFrame>) => {
     try {
-      const video = await createVideoElement(file)
-      const duration = video.duration
-      const canvas: HTMLCanvasElement = document.createElement('canvas')
-      const ctx: CanvasRenderingContext2D | null = canvas.getContext('2d')
+      // The getReader() method of the ReadableStream interface creates a reader and locks
+      // the stream to it. While the stream is locked, no other reader can be acquired until
+      // this one is released.
+      reader.value = readableStream.getReader()
+      while (isProcessing.value) {
+        // Result objects contain two properties:
+        // done  - true if the stream has already given you all its data.
+        // value - some data. Always undefined when done is true.
+        const { done, value: videoFrame } = await reader.value.read()
+        if (done) {
+          console.log('Stream completed and done reading frames')
+          break
+        }
 
-      /**
-       * Seeked event occurs when the user is finished moving/skipping to a new position in the audio/video
-       */
-      // 'seeked' is fired when the seek operation completes
-      video.addEventListener('seeked', async () => {
-        canvas.width = video.videoWidth
-        canvas.height = video.videoHeight
-        ctx.drawImage(video, 0, 0)
+        const arrayBuffer: ArrayBuffer = await extractFrameAsArrayBuffer(videoFrame)
 
-        const blob: Blob = await new Promise(resolve =>
-          canvas.toBlob(resolve, 'image/jpeg', 0.8)
-        )
-
-        const arrayBuffer = await new Promise(resolve => {
-          const reader = new FileReader()
-          reader.onload = () => resolve(reader.result)
-          reader.readAsArrayBuffer(blob)
-        })
-
-        if (socket.value) {
+        // Send to server
+        if (socket.value && socket.value.connected) {
           socket.value.emit('feed', {
             frame: arrayBuffer,
-            width: video.videoWidth,
-            height: video.videoHeight,
+            width: videoFrame.displayWidth,
+            height: videoFrame.displayHeight,
             timestamp: performance.now(),
           })
         }
-      })
 
-      // Process frame by frame
-      const fps = 30
-      const frameCount = Math.floor(duration * fps)
-
-      for (let i = 0; i < frameCount; i++) {
-        if (!isProcessing.value) break // Stop if processing was cancelled
-
-        const time = i / fps
-        video.currentTime = time
-
-        // Wait for seek to complete
-        await new Promise(resolve => {
-          const checkReady = () => {
-            if (!video.seeking) {
-              video.removeEventListener('seeked', checkReady)
-              resolve()
-            }
-          }
-          video.addEventListener('seeked', checkReady)
-        })
-
-        processingProgress.value = (i / frameCount) * 100
+        videoFrame.close()
       }
+    } catch (error) {
+      console.error('Error reading frames:', error)
+    } finally {
+      stopProcessing()
+    }
+  }
 
-      socket.value.emit('processing-complete')
-    } catch (err) {
-      console.error('Video processing error:', err)
-      isProcessing.value = false
-      return false
+  const extractFrameAsArrayBuffer = async (videoFrame: VideoFrame): Promise<ArrayBuffer> => {
+    // Convert frame to canvas to get image data
+    // console.debug('Video format: ', videoFrame.format)
+    const bitmap: ImageBitmap = await createImageBitmap(videoFrame)
+    // console.log(`Width: ${videoFrame.displayWidth}, Height: ${videoFrame.displayHeight}`)
+    const canvas = new OffscreenCanvas(videoFrame.displayWidth, videoFrame.displayHeight)
+    const ctx: OffscreenCanvasRenderingContext2D | null = canvas.getContext('2d')
+
+    if (!ctx) {
+      console.warn('No context found')
+      return Promise.reject('No context found')
     }
 
-    return true
+    ctx.drawImage(bitmap, 0, 0,
+      videoFrame.displayWidth, videoFrame.displayHeight )
+
+    // Get image data as blob
+    const blob = await canvas.convertToBlob({ quality: 1.0, type: 'image/jpeg' })
+    const result = await blob.arrayBuffer()
+
+    // const uint8Array = new Uint8Array(result)
+    // const checkJpeg = isJpeg(uint8Array)
+    // console.log(`${uint8Array[0]}, ${uint8Array[1]}, ${uint8Array[2]}`)
+
+    // Convert blob to array buffer
+    return result
+  }
+
+  const stopProcessing = (readableStream?: ReadableStream) => {
+    isProcessing.value = false
+    if (reader.value) {
+      reader.value.cancel()
+      reader.value = null
+    }
+    if (trackProcessor.value && !readableStream?.locked) {
+      trackProcessor.value.readable.cancel()
+      trackProcessor.value = null
+    }
+    if (mediaStream.value) {
+      mediaStream.value.getTracks().forEach((track) => track.stop())
+      mediaStream.value = null
+    }
   }
 
   const cancelProcessing = () => {
-    isProcessing.value = false
-    if (isConnected.value) {
+    if (isConnected.value && socket.value) {
       socket.value.emit('processing-cancelled')
+      isProcessing.value = false
     }
   }
-
-  const createVideoElement = (file: File): Promise<HTMLVideoElement> => {
-    return new Promise((resolve, reject) => {
-      const video: HTMLVideoElement = document.createElement('video')
-      video.preload = 'metadata'
-
-      video.onloadedmetadata = () => {
-        URL.revokeObjectURL(video.src)
-        resolve(video)
-      }
-
-      video.onerror = () => {
-        reject(new Error('Invalid video file'))
-      }
-
-      video.src = URL.createObjectURL(file)
-    })
-  }
-
-  onUnmounted(() => {
-    if (socket.value) {
-      socket.value.disconnect()
-    }
-  })
 
   return {
     connect,
+    disconnect,
     sendVideo,
-    setStage,
+    updateStage,
     registerProcessor,
     cancelProcessing,
     isConnected,

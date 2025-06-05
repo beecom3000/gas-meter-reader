@@ -40,12 +40,14 @@ import VideoPlayer from '@/views/VideoPlayer.vue'
 import type { VideoDimensions } from '@/models/video-dimensions.ts'
 import { useVideoMedia } from '@/composables/use-video-media.ts'
 
+declare const MediaStreamTrackProcessor: any;
+
 const videoFile = ref<File>()
 const videoPlayer = ref<InstanceType<typeof VideoPlayer> | null>(null)
 const videoSrc = ref<string>('')
 const isProcessing = ref<boolean>(false)
 const mediaStream = ref<MediaStream | null>(null)
-const trackProcessor = ref<MediaStreamTrackProcessor | null>(null)
+const trackProcessor = ref<InstanceType<typeof MediaStreamTrackProcessor> | null>(null)
 const reader = ref<ReadableStreamReader<VideoFrame> | null>(null)
 const videoDimensions = ref<VideoDimensions>({
   width: 400,
@@ -115,7 +117,7 @@ const startProcessing = async () => {
 
   try {
     // Create a MediaStream from the video file
-    const stream: MediaStream = (videoPlayer.value!.videoRef as HTMLMediaElement).captureStream()
+    const stream: MediaStream = (videoPlayer.value!.videoRef as HTMLCanvasElement).captureStream()
     mediaStream.value = stream
 
     // Get video track
