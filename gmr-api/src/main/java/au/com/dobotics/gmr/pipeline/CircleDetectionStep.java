@@ -2,15 +2,18 @@ package au.com.dobotics.gmr.pipeline;
 
 import au.com.dobotics.gmr.model.Circle;
 import au.com.dobotics.gmr.model.ProcessingStage;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.bytedeco.opencv.global.opencv_imgproc;
 import org.bytedeco.opencv.opencv_core.*;
-import org.bytedeco.opencv.opencv_imgproc.Vec3fVector;
-import org.opencv.imgproc.Imgproc;
+import org.bytedeco.opencv.opencv_imgproc.Vec4fVector;
 
 import static org.bytedeco.opencv.global.opencv_imgproc.*;
 
-
+@Getter
+@Slf4j
 public class CircleDetectionStep implements ImageProcessingStep {
+
     private final CircleDetectionConfig config;
 
     public CircleDetectionStep(CircleDetectionConfig config) {
@@ -23,7 +26,7 @@ public class CircleDetectionStep implements ImageProcessingStep {
         try (Mat gray = new Mat();
              Mat blurred = new Mat();
              Mat binary = new Mat();
-             Vec3fVector circles = new Vec3fVector()) {
+             Vec4fVector circles = new Vec4fVector()) {
 
             // Convert to grayscale
             cvtColor(inputImage, gray, opencv_imgproc.COLOR_BGR2GRAY);
@@ -42,6 +45,10 @@ public class CircleDetectionStep implements ImageProcessingStep {
             // Apply threshold
             threshold(blurred, binary, config.thresholdValue(), 255,
                     THRESH_BINARY);
+
+            if (stage.is(ProcessingStage.THRESHOLD)) {
+                return binary.clone();
+            }
 
             // Calculate absolute values from factors
             double minDist = gray.rows() * config.minDistFactor();
@@ -63,23 +70,27 @@ public class CircleDetectionStep implements ImageProcessingStep {
 
             // Store detected circle
             if (!circles.empty()) {
-                Point3f[] circleData = circles.get();
-                float x = circleData[0].get();
-                float y = circleData[1].get();
-                float radius = circleData[2].get();
+                Scalar4f[] circleData = circles.get();
+                if (circleData.length >= 3) {
+                    float x = circleData[0].get();
+                    float y = circleData[1].get();
+                    float radius = circleData[2].get();
 //                Point center = new Point(Math.round(x), Math.round(y));
-                context.put(Context.Key.CIRCLE, new Circle(x, y, radius));
+                    context.put(Context.Key.CIRCLE, new Circle(x, y, radius));
+                }
             }
 
             // Visualization
             Mat output = inputImage.clone();
             if (circles.size() > 0) {
-                Point3f[] circleData = circles.get();
-                float x = circleData[0].get();
-                float y = circleData[1].get();
-                float radius = circleData[2].get();
-                circle(output, new Point(Math.round(x), Math.round(y)), Math.round(radius),
-                        new Scalar(0, 255, 0, 1));
+                Scalar4f[] circleData = circles.get();
+                if (circleData.length >= 3) {
+                    float x = circleData[0].get();
+                    float y = circleData[1].get();
+                    float radius = circleData[2].get();
+                    circle(output, new Point(Math.round(x), Math.round(y)), Math.round(radius),
+                            Scalar.GREEN);
+                }
             }
             return output;
         }

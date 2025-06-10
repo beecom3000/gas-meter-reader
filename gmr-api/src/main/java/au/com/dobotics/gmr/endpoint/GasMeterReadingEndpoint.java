@@ -1,5 +1,6 @@
 package au.com.dobotics.gmr.endpoint;
 
+import au.com.dobotics.gmr.pipeline.CircleDetectionConfig;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -7,7 +8,7 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 
 @Slf4j
 @RestController
-@RequestMapping("/api/v1/reading")
+@RequestMapping("/api/v1/gas")
 public class GasMeterReadingEndpoint {
 
     @PostMapping(value = "/stream")
@@ -20,5 +21,11 @@ public class GasMeterReadingEndpoint {
     @ResponseBody
     public ResponseEntity<String> livestream(@RequestBody byte[] data) {
         return ResponseEntity.ok("pong");
+    }
+
+    @GetMapping(value = "/config")
+    @ResponseBody
+    public ResponseEntity<CircleDetectionConfig> config() {
+        return null;
     }
 }

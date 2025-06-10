@@ -14,7 +14,6 @@
         <q-route-tab to="/about" label="About" />
         <q-route-tab to="/train" label="Train" />
         <q-route-tab to="/upload" label="Upload" />
-        <q-route-tab to="/upup" label="Up" />
       </q-tabs>
     </q-header>
 

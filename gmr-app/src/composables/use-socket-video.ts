@@ -2,13 +2,13 @@ import { io, Socket } from 'socket.io-client'
 import { ref } from 'vue'
 import type { ProcessingCallback } from '@/models/processing-callback.ts'
 import type { Metadata } from '@/models/metadata.ts'
+import type {Stage} from "@/models/stage.ts";
 
 declare const MediaStreamTrackProcessor: any;
 
-export type Stage = 'original' | 'grayscale' | 'blur' | 'detection' | 'final'
-
 export function useSocketVideo() {
   const socket = ref<Socket | null>(null)
+  const videoPreview = ref<HTMLVideoElement | null>(null)
   const isConnected = ref<boolean>(false)
   const currentStage = ref<Stage>('original')
   const processingProgress = ref<number>(0)
@@ -80,7 +80,7 @@ export function useSocketVideo() {
     }
   }
 
-  const sendVideo = async (stream: MediaStream) => {
+  const captureFramesAndSend = async (stream: MediaStream) => {
     try {
       if (socket.value) {
         socket.value.emit('processing-start')
@@ -112,8 +112,8 @@ export function useSocketVideo() {
   const fallbackFrameCapture = () => {
     const canvas = document.createElement('canvas')
     const ctx = canvas.getContext('2d')
-    canvas.width = videoPreview.value!.videoWidth
-    canvas.height = videoPreview.value!.videoHeight
+    canvas.width = (videoPreview.value as HTMLVideoElement).videoWidth;
+    canvas.height = (videoPreview.value as HTMLVideoElement).videoHeight
 
     const captureInterval = setInterval(() => {
       if (!isProcessing.value) {
@@ -121,12 +121,12 @@ export function useSocketVideo() {
         return
       }
 
-      ctx.drawImage(videoPreview.value, 0, 0, canvas.width, canvas.height)
-
-      canvas.toBlob(
-        async (blob: Blob) => {
+      if (ctx && videoPreview.value) {
+        ctx.drawImage(videoPreview.value, 0, 0, canvas.width, canvas.height)
+      }
+      canvas.toBlob(async (blob: Blob | null) => {
+        if (blob) {
           const arrayBuffer = await blob.arrayBuffer()
-
           if (socket.value && socket.value.connected) {
             socket.value.emit('video-frame', {
               frameData: arrayBuffer,
@@ -135,10 +135,9 @@ export function useSocketVideo() {
               timestamp: performance.now(),
             })
           }
-        },
-        'image/jpeg',
-        0.8,
-      )
+        }
+      },
+          'image/jpeg',0.8,)
     }, 1000 / 30) // 30 FPS
   }
 
@@ -228,19 +227,21 @@ export function useSocketVideo() {
     if (isConnected.value && socket.value) {
       socket.value.emit('processing-cancelled')
       isProcessing.value = false
+      stopProcessing();
     }
   }
 
   return {
     connect,
     disconnect,
-    sendVideo,
+    captureFramesAndSend,
     updateStage,
     registerProcessor,
     cancelProcessing,
     isConnected,
     currentStage,
     processingProgress,
-    isProcessing
+    isProcessing,
+    videoPreview
   }
 }

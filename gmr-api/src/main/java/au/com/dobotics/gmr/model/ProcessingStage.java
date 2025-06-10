@@ -5,7 +5,8 @@ public enum ProcessingStage {
     GRAYSCALE,
     BLUR,
     CANNY_EDGE,
-    DIGIT_DETECTION,
+    THRESHOLD,
+    DETECTION,
     OCR,
     FINAL;
 

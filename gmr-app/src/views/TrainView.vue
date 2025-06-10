@@ -1,235 +1,224 @@
 <template>
-  <div class="frame-uploader">
-    <h2>Video Frame Uploader</h2>
-
-    <div v-if="!isProcessing">
-      <input
-        type="file"
-        accept="video/*"
-        @change="handleFileChange"
-        class="file-input"
-      >
-      <button @click="startProcessing" :disabled="!videoFile">
-        Process Video
-      </button>
+  <div class="video-processor">
+    <div class="row">
+      <q-btn icon="settings" label="Dial Detection" @click="showDialConfigDialog = true"></q-btn>
+      <q-dialog v-model="showDialConfigDialog">
+        <DialDetectionSettingsView></DialDetectionSettingsView>
+      </q-dialog>
     </div>
-
-    <div v-else>
-      <div class="progress-container">
-        <progress :value="progress" max="100"></progress>
-        <span>{{ progress }}%</span>
-        <span> | Frame {{ currentFrame }} of {{ totalFrames }}</span>
+    <div class="row">
+<!--      <q-input v-model="text" label="Preset name" />-->
+      <q-btn icon="save" color="primary" label="Save Preset" @click="savePreset"></q-btn>
+      <q-dialog v-model="showPresetDialog">
+        <DialDetectionSettingsView></DialDetectionSettingsView>
+      </q-dialog>
+    </div>
+    <div class="row">
+      <div class="col-5">
+        <div class="row q-pb-md">
+          <q-file
+              v-model="videoFile"
+              label="Choose a Video"
+              accept="video/*"
+              outlined
+              use-chips
+              @update:model-value="handleFileUpload"
+          ></q-file>
+        </div>
+        <div class="row q-pa-md">
+          <video ref="videoPreview" controls muted v-if="videoFile" class="video-preview"></video>
+        </div>
       </div>
+      <div class="col-2 q-pa-md">
+        <div class="row">
+          <div class="controls q-pb-sm">
+            <q-btn
+                color="primary"
+                @click="processVideo"
+                :disabled="!isConnected || !videoFile || isProcessing"
+            >
+              Process
+            </q-btn>
+            <q-btn
+              @click="cancelProcessing"
+              :disabled="!isProcessing"
+            >
+              Cancel
+            </q-btn>
+          </div>
+        </div>
+        <div class="row">
+          <div class="progress" v-if="isProcessing">
+            Processing: {{ Math.round(processingProgress) }}%
+            <progress :value="processingProgress" max="100"></progress>
+          </div>
 
-      <button @click="cancelProcessing" v-if="isProcessing">
-        Cancel
-      </button>
-
-      <canvas ref="canvas" style="display: none;"></canvas>
+          <div class="stage-controls" v-show="isConnected && videoFile">
+            <h6>Processing Stage:</h6>
+            <div v-for="stage in stages" :key="stage.value" class="radio-option">
+              <q-radio
+                :id="stage.id"
+                :val="stage.value"
+                v-model="currentStage"
+                @update:model-value="updateStage"
+                :label="stage.label"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-5">
+        <div class="output">
+          <h5 class="q-pb-md">Preview stage ({{ currentStage }})</h5>
+          <canvas class="q-pa-md" ref="outputCanvas"></canvas>
+        </div>
+      </div>
     </div>
-
-    <div v-if="errorMessage" class="error-message">
-      {{ errorMessage }}
+    <div class="row">
+      <StatusBar
+          :is-connected="isConnected"
+      ></StatusBar>
     </div>
-
-    <div v-if="successMessage" class="success-message">
-      {{ successMessage }}
-    </div>
-
-    <video
-      v-if="videoUrl"
-      ref="videoElement"
-      controls
-      class="video-preview"
-    ></video>
   </div>
 </template>
 
-<script lang="ts" setup>
-import { ref, onBeforeUnmount } from 'vue';
-import axios from 'axios';
+<script setup lang="ts">
+import { onMounted, onUnmounted, ref } from 'vue'
+import { useSocketVideo } from '@/composables/use-socket-video.ts'
+import type { Metadata } from '@/models/metadata.ts'
+import DialDetectionSettingsView from "@/views/DialDetectionSettingsView.vue";
+import StatusBar from "@/components/StatusBar.vue";
 
-// Reactive state
-const videoFile = ref(null);
-const videoUrl = ref('');
-const isProcessing = ref(false);
-const progress = ref(0);
-const currentFrame = ref(0);
-const totalFrames = ref(0);
-const errorMessage = ref('');
-const successMessage = ref('');
-const videoElement = ref(null);
-const canvas = ref(null);
-const processingInterval = ref(null);
-const abortController = ref(null);
+const {
+  connect,
+  captureFramesAndSend,
+  updateStage,
+  registerProcessor,
+  cancelProcessing,
+  disconnect,
+  isConnected,
+  currentStage,
+  processingProgress,
+  isProcessing,
+  videoPreview
+} = useSocketVideo()
 
-// Handle file selection
-const handleFileChange = (event) => {
-  const file = event.target.files[0];
+const videoFile = ref<File | null>(null)
+const outputCanvas = ref<HTMLCanvasElement | null>(null)
+const showDialConfigDialog = ref<boolean>(false);
+const showPresetDialog = ref<boolean>(false);
 
-  if (!file) return;
+const stages = [
+  { id: 'original', value: 'original', label: 'Original (No Processing)' },
+  { id: 'grayscale', value: 'grayscale', label: 'Grayscale' },
+  { id: 'blur', value: 'blur', label: 'Blur' },
+  { id: 'threshold', value: 'threshold', label: 'Threshold' },
+  { id: 'canny_edge', value: 'canny_edge', label: 'Canny Edge' },
+  { id: 'detection', value: 'detection', label: 'Object Detection' },
+  { id: 'final', value: 'final', label: 'Final' }
+]
 
-  if (!file.type.startsWith('video/')) {
-    errorMessage.value = 'Please select a valid video file';
-    return;
+// Initialize
+onMounted(() => {
+  connect()
+
+  registerProcessor((metadata: Metadata, data: ArrayBuffer) => {
+    displayFrame(metadata, data)
+  })
+})
+
+onUnmounted(() => {
+  cancelProcessing()
+  disconnect()
+})
+
+const savePreset = () => {
+  alert('Not implemented yet')
+}
+
+const displayFrame = (metadata: Metadata, data: ArrayBuffer) => {
+  if (!outputCanvas.value) return
+
+  const blob = new Blob([new Uint8Array(data.slice(1))], { type: 'image/jpeg' })
+  const img = new Image()
+  img.onload = () => {
+    if (outputCanvas.value) {
+      outputCanvas.value.width = img.width
+      outputCanvas.value.height = img.height
+      const ctx: CanvasRenderingContext2D | null = outputCanvas.value.getContext('2d')
+      if (ctx) {
+        ctx.drawImage(img, 0, 0)
+      }
+      URL.revokeObjectURL(img.src)
+    }
   }
+  img.src = URL.createObjectURL(blob)
+}
 
-  videoFile.value = file;
-  videoUrl.value = URL.createObjectURL(file);
-  errorMessage.value = '';
-  successMessage.value = '';
-};
+const handleFileUpload = (file: File) => {
+  videoFile.value = file
 
-// Start processing video frames
-const startProcessing = async () => {
-  if (!videoFile.value || !videoElement.value) return;
+  // Create preview
+  const video: HTMLVideoElement = document.createElement('video')
+  video.preload = 'metadata'
+  video.onloadedmetadata = () => {
+    if (videoPreview.value) {
+      videoPreview.value.src = URL.createObjectURL(file)
+      URL.revokeObjectURL(video.src)
+    }
+  }
+  video.src = URL.createObjectURL(file)
+}
 
-  try {
+const processVideo = async () => {
+  if (videoFile.value && videoPreview.value) {
     isProcessing.value = true;
-    progress.value = 0;
-    currentFrame.value = 0;
-    abortController.value = new AbortController();
-
-    // Wait for video metadata to load
-    await new Promise((resolve) => {
-      videoElement.value.onloadedmetadata = resolve;
-      videoElement.value.load();
-    });
-
-    const video = videoElement.value;
-    const canvasEl = canvas.value;
-    const ctx = canvasEl.getContext('2d');
-
-    // Set canvas dimensions to match video
-    canvasEl.width = video.videoWidth;
-    canvasEl.height = video.videoHeight;
-
-    // Calculate frame count based on duration and target FPS
-    const targetFPS = 10; // Adjust as needed
-    totalFrames.value = Math.floor(video.duration * targetFPS);
-
-    // Process frames sequentially
-    for (let i = 0; i < totalFrames.value; i++) {
-      if (abortController.value.signal.aborted) break;
-
-      // Seek to the frame time
-      video.currentTime = i / targetFPS;
-
-      // Wait for seek to complete and frame to update
-      await new Promise((resolve) => {
-        video.onseeked = () => {
-          // Draw frame to canvas
-          ctx.drawImage(video, 0, 0, canvasEl.width, canvasEl.height);
-
-          // Convert canvas to byte array
-          canvasEl.toBlob(async (blob) => {
-            const arrayBuffer = await blob.arrayBuffer();
-            const byteArray = new Uint8Array(arrayBuffer);
-
-            // Send frame to server
-            await sendFrameToServer(byteArray, {
-              frameNumber: i,
-              totalFrames: totalFrames.value,
-              timestamp: video.currentTime,
-              width: canvasEl.width,
-              height: canvasEl.height
-            });
-
-            // Update progress
-            currentFrame.value = i + 1;
-            progress.value = Math.round((currentFrame.value / totalFrames.value) * 100);
-            resolve();
-          }, 'image/jpeg', 0.8); // Adjust quality as needed
-        };
-      });
-    }
-
-    if (!abortController.value.signal.aborted) {
-      successMessage.value = `All ${totalFrames.value} frames processed successfully!`;
-    }
-  } catch (error) {
-    if (error.name !== 'CanceledError') {
-      errorMessage.value = 'Processing failed: ' + error.message;
-      console.error('Error:', error);
-    }
-  } finally {
-    isProcessing.value = false;
+    const mediaElement: HTMLMediaElement = (videoPreview.value as HTMLMediaElement);
+    const stream: MediaStream = mediaElement.captureStream()
+    await captureFramesAndSend(stream)
   }
-};
-
-// Send frame to server
-const sendFrameToServer = async (frameData, metadata) => {
-  try {
-    const response = await axios.post('your-server-endpoint/frames', {
-      frameData: Array.from(frameData), // Convert Uint8Array to regular array
-      metadata: metadata
-    }, {
-      signal: abortController.value.signal
-    });
-
-    return response.data;
-  } catch (error) {
-    if (error.name !== 'CanceledError') {
-      throw error;
-    }
-  }
-};
-
-// Cancel processing
-const cancelProcessing = () => {
-  if (abortController.value) {
-    abortController.value.abort();
-  }
-  isProcessing.value = false;
-  errorMessage.value = 'Processing canceled';
-};
-
-// Clean up
-onBeforeUnmount(() => {
-  cancelProcessing();
-  if (videoUrl.value) {
-    URL.revokeObjectURL(videoUrl.value);
-  }
-});
+}
 </script>
 
 <style scoped>
-.frame-uploader {
-  max-width: 800px;
+.video-processor {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 80%;
   margin: 0 auto;
-  padding: 20px;
-}
-
-.file-input {
-  display: block;
-  margin-bottom: 15px;
+  padding: 2rem;
 }
 
 .video-preview {
-  max-width: 100%;
-  margin-top: 20px;
-  display: block;
+  max-width: 100%
 }
 
-.error-message {
-  color: red;
-  margin-top: 10px;
+.controls {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
 }
 
-.success-message {
-  color: green;
-  margin-top: 10px;
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 progress {
   width: 100%;
-  margin-right: 10px;
 }
 
-.progress-container {
+canvas {
+  max-width: 100%;
+  background: #000;
+}
+
+.stage-controls {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 15px;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 </style>
+
