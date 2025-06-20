@@ -1,4 +1,4 @@
-package au.com.dobotics.gmr.pipeline;
+package au.com.dobotics.gmr.pipeline.config;
 
 import lombok.Builder;
 

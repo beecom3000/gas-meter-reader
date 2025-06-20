@@ -1,13 +1,11 @@
 package au.com.dobotics.gmr.socketio;
 
-import com.corundumstudio.socketio.SocketIONamespace;
 import com.corundumstudio.socketio.SocketIOServer;
 import com.corundumstudio.socketio.annotation.SpringAnnotationScanner;
 import org.springframework.beans.BeansException;
 import org.springframework.util.ReflectionUtils;
 
 import java.lang.reflect.Field;
-import java.util.Collection;
 
 public class ExtendedSpringAnnotationScanner extends SpringAnnotationScanner {
 

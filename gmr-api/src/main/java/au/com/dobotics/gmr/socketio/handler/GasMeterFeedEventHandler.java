@@ -70,8 +70,8 @@ public class GasMeterFeedEventHandler {
         log.info("Client disconnected from {}: {}", NAMESPACE, sessionId);
     }
 
-    @OnEvent("stage-change")
-    public void onStageChange(SocketIOClient client, String stage, AckRequest ackRequest) {
+    @OnEvent("update-stage")
+    public void onUpdateStage(SocketIOClient client, String stage, AckRequest ackRequest) {
         ProcessingStage newStage = ProcessingStage.valueOf(stage.toUpperCase());
         String sessionId = client.getSessionId().toString();
         ProcessingStage currentStage = clientStages.get(sessionId);
@@ -127,20 +127,24 @@ public class GasMeterFeedEventHandler {
         this.pipeline.addContext(Context.Key.FRAME_WIDTH, width);
         this.pipeline.addContext(Context.Key.FRAME_HEIGHT, height);
 
-        byte[] processedFrame = this.pipeline.execute(frame);
+        try {
+            byte[] processedFrame = this.pipeline.execute(frame);
 
-        // validate jpeg
+            // validate jpeg
 //        boolean isJpeg = jpegValidator.isJpeg(processedFrame);
 //        assert isJpeg : "processed frame is not jpeg";
 
-        // Send with explicit binary attachment
-        Map<String, Object> metadata = new HashMap<>();
-        metadata.put("width", width);
-        metadata.put("height", height);
-        metadata.put("timestamp", System.currentTimeMillis());
+            // Send with explicit binary attachment
+            Map<String, Object> metadata = new HashMap<>();
+            metadata.put("width", width);
+            metadata.put("height", height);
+            metadata.put("timestamp", System.currentTimeMillis());
 
-        // Send back the processed frame
-        client.sendEvent("processed-frame", metadata, processedFrame);
+            // Send back the processed frame
+            client.sendEvent("processed-frame", metadata, processedFrame);
+        } catch(Exception ex) {
+            client.sendEvent("server-error", stage);
+        }
     }
 
 

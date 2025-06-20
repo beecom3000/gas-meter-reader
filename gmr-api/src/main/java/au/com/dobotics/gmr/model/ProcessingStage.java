@@ -3,11 +3,9 @@ package au.com.dobotics.gmr.model;
 public enum ProcessingStage {
     ORIGINAL,
     GRAYSCALE,
-    BLUR,
+    BLURRED,
     CANNY_EDGE,
     THRESHOLD,
-    DETECTION,
-    OCR,
     FINAL;
 
     public boolean is(ProcessingStage stage) {

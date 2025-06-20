@@ -13,38 +13,39 @@
         <DialDetectionSettingsView></DialDetectionSettingsView>
       </q-dialog>
     </div>
+    <div class="row q-pb-md">
+      <q-file
+          v-model="videoFile"
+          label="Choose a Video"
+          accept="video/*"
+          outlined
+          use-chips
+          @update:model-value="handleFileUpload"
+      ></q-file>
+      <q-btn @click="takeSnapshot" icon="camera" v-show="videoFile">
+        <q-tooltip>Take snapshot</q-tooltip>
+      </q-btn>
+    </div>
     <div class="row">
       <div class="col-5">
-        <div class="row q-pb-md">
-          <q-file
-              v-model="videoFile"
-              label="Choose a Video"
-              accept="video/*"
-              outlined
-              use-chips
-              @update:model-value="handleFileUpload"
-          ></q-file>
-        </div>
         <div class="row q-pa-md">
           <video ref="videoPreview" controls muted v-if="videoFile" class="video-preview"></video>
         </div>
       </div>
       <div class="col-2 q-pa-md">
         <div class="row">
-          <div class="controls q-pb-sm">
+          <div class="q-pb-sm">
             <q-btn
                 color="primary"
                 @click="processVideo"
                 :disabled="!isConnected || !videoFile || isProcessing"
-            >
-              Process
-            </q-btn>
+                label="Process"
+            />
             <q-btn
               @click="cancelProcessing"
               :disabled="!isProcessing"
-            >
-              Cancel
-            </q-btn>
+              label="Stop"
+            />
           </div>
         </div>
         <div class="row">
@@ -68,10 +69,10 @@
         </div>
       </div>
       <div class="col-5">
-        <div class="output">
+          <canvas class="q-pa-md" ref="outputCanvas">
+            <q-icon name="video_camera_back"></q-icon>
+          </canvas>
           <h5 class="q-pb-md">Preview stage ({{ currentStage }})</h5>
-          <canvas class="q-pa-md" ref="outputCanvas"></canvas>
-        </div>
       </div>
     </div>
     <div class="row">
@@ -86,7 +87,7 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useSocketVideo } from '@/composables/use-socket-video.ts'
 import type { Metadata } from '@/models/metadata.ts'
-import DialDetectionSettingsView from "@/views/DialDetectionSettingsView.vue";
+import DialDetectionSettingsView from "@/components/DialDetectionSettingsView.vue";
 import StatusBar from "@/components/StatusBar.vue";
 
 const {
@@ -134,6 +135,10 @@ onUnmounted(() => {
 
 const savePreset = () => {
   alert('Not implemented yet')
+}
+
+const takeSnapshot = () => {
+
 }
 
 const displayFrame = (metadata: Metadata, data: ArrayBuffer) => {

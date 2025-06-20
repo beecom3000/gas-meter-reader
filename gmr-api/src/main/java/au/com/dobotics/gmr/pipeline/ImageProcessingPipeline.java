@@ -9,7 +9,6 @@ import org.bytedeco.opencv.global.opencv_imgcodecs;
 import org.bytedeco.opencv.global.opencv_imgproc;
 import org.bytedeco.opencv.opencv_core.*;
 import org.bytedeco.opencv.opencv_imgproc.Vec4iVector;
-import org.springframework.stereotype.Component;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -123,7 +122,7 @@ public class ImageProcessingPipeline {
 
             opencv_imgproc.GaussianBlur(gray, blurred, new Size(5, 5), 0);
 
-            if (ProcessingStage.BLUR == stage) {
+            if (ProcessingStage.BLURRED == stage) {
                 return blurred;
             }
 

@@ -1,1 +1,1 @@
-export type Stage = 'original' | 'grayscale' | 'blur' | 'canny_edge' | 'threshold' | 'detection' | 'final'
+export type Stage = 'grayscale' | 'blurred' | 'canny_edge' | 'final'

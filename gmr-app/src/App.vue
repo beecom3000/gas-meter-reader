@@ -11,9 +11,9 @@
       </q-toolbar>
 
       <q-tabs align="left">
-        <q-route-tab to="/about" label="About" />
+        <q-route-tab to="/analyzer" label="Analyzer" />
         <q-route-tab to="/train" label="Train" />
-        <q-route-tab to="/upload" label="Upload" />
+        <q-route-tab to="/preview" label="Preview" />
       </q-tabs>
     </q-header>
 

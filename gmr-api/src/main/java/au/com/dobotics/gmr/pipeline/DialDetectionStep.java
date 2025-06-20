@@ -2,6 +2,8 @@ package au.com.dobotics.gmr.pipeline;
 
 import au.com.dobotics.gmr.model.Circle;
 import au.com.dobotics.gmr.model.ProcessingStage;
+import au.com.dobotics.gmr.pipeline.config.DialDetectionConfig;
+import au.com.dobotics.gmr.pipeline.config.HoughCircleConfig;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.bytedeco.opencv.global.opencv_imgproc;
@@ -12,17 +14,24 @@ import static org.bytedeco.opencv.global.opencv_imgproc.*;
 
 @Getter
 @Slf4j
-public class CircleDetectionStep implements ImageProcessingStep {
+public class DialDetectionStep extends BaseProcessingStep implements ImageProcessingStep {
 
-    private final CircleDetectionConfig config;
+    private final ConfigManager configManager;
 
-    public CircleDetectionStep(CircleDetectionConfig config) {
-        this.config = config;
+    public DialDetectionStep(ConfigManager configManager) {
+        this.configManager = configManager;
+    }
+
+    public DialDetectionConfig config() {
+        return this.configManager.get(DialDetectionConfig.class);
+    }
+
+    public HoughCircleConfig houghConfig() {
+        return this.configManager.get(HoughCircleConfig.class);
     }
 
     @Override
     public Mat process(Mat inputImage, Context context) {
-        ProcessingStage stage = context.get(Context.Key.PROCESSING_STAGE, ProcessingStage.class);
         try (Mat gray = new Mat();
              Mat blurred = new Mat();
              Mat binary = new Mat();
@@ -31,41 +40,41 @@ public class CircleDetectionStep implements ImageProcessingStep {
             // Convert to grayscale
             cvtColor(inputImage, gray, opencv_imgproc.COLOR_BGR2GRAY);
 
-            if (stage.is(ProcessingStage.GRAYSCALE)){
+            if (is(context, ProcessingStage.GRAYSCALE)){
                 return gray.clone();
             }
 
             // Apply Gaussian blur
             GaussianBlur(gray, blurred,
-                    new Size(config.blurKernelSize(), config.blurKernelSize()), 2);
-            if (stage.is(ProcessingStage.BLUR)) {
+                    new Size(config().getBlurKernelSize(), config().getBlurKernelSize()), 2);
+            if (is(context, ProcessingStage.BLURRED)) {
                 return blurred.clone();
             }
 
-            // Apply threshold
-            threshold(blurred, binary, config.thresholdValue(), 255,
+            // Apply a threshold
+            threshold(blurred, binary, config().getThresholdValue(), 255,
                     THRESH_BINARY);
 
-            if (stage.is(ProcessingStage.THRESHOLD)) {
+            if (is(context, ProcessingStage.THRESHOLD)) {
                 return binary.clone();
             }
 
             // Calculate absolute values from factors
-            double minDist = gray.rows() * config.minDistFactor();
-            int minRadius = (int) (gray.rows() * config.minRadiusFactor());
-            int maxRadius = (int) (gray.rows() * config.maxRadiusFactor());
+            double minDist = gray.rows() * houghConfig().getMinDist();
+            int minRadius = (int) (gray.rows() * houghConfig().getMinRadius());
+            int maxRadius = (int) (gray.rows() * houghConfig().getMaxRadius());
 
             // Detect circles
             HoughCircles(
                     binary,
                     circles,
                     HOUGH_GRADIENT,
-                    config.dp(),
-                    minDist,
-                    config.cannyEdgeThreshold1(),
-                    config.cannyEdgeThreshold2(),
-                    minRadius,
-                    maxRadius
+                    houghConfig().getDp(),       // dp: Inverse ratio of accumulator resolution
+                    minDist,                // minDist: minimum distance between detected centers
+                    houghConfig().getParam1(),   // param1: upper threshold for the internal canny edge detector
+                    houghConfig().getParam2(),   // param2: threshold for center detection
+                    minRadius,              // min radius
+                    maxRadius               // max radius
             );
 
             // Store detected circle
@@ -78,6 +87,8 @@ public class CircleDetectionStep implements ImageProcessingStep {
 //                Point center = new Point(Math.round(x), Math.round(y));
                     context.put(Context.Key.CIRCLE, new Circle(x, y, radius));
                 }
+            } else {
+                log.warn("No circles found");
             }
 
             // Visualization
@@ -93,6 +104,9 @@ public class CircleDetectionStep implements ImageProcessingStep {
                 }
             }
             return output;
+//        } catch (Exception ex) {
+//            log.error("Error processing image", ex);
         }
+//        return null;
     }
 }

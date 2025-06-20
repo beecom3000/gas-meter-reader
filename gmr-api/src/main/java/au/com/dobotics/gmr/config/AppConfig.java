@@ -1,9 +1,9 @@
 package au.com.dobotics.gmr.config;
 
 import au.com.dobotics.gmr.model.Config;
-import au.com.dobotics.gmr.pipeline.CircleDetectionConfig;
-import au.com.dobotics.gmr.pipeline.CircleDetectionStep;
-import au.com.dobotics.gmr.pipeline.ImageProcessingPipeline;
+import au.com.dobotics.gmr.pipeline.*;
+import au.com.dobotics.gmr.pipeline.config.DialDetectionConfig;
+import au.com.dobotics.gmr.pipeline.config.HoughCircleConfig;
 import au.com.dobotics.gmr.validator.JpegValidator;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -24,21 +24,37 @@ public class AppConfig {
     }
 
     @Bean
-    public ImageProcessingPipeline imageProcessingPipeline() {
-        CircleDetectionConfig config = CircleDetectionConfig
-                .builder()
+    public HoughCircleConfig houghCircleConfig() {
+        return HoughCircleConfig.builder()
                 .dp(1.0)
-                .minDistFactor(0.125)
-                .cannyEdgeThreshold1(100)
-                .cannyEdgeThreshold2(30)
-                .minRadiusFactor(0.3)
-                .maxRadiusFactor(0.5)
-                .blurKernelSize(9)
+                .minDist(100)
+                .param1(50)
+                .param2(30)
+                .minRadius(100)
+                .maxRadius(250)
+                .build();
+    }
+
+    @Bean
+    public DialDetectionConfig dialDetectionConfig() {
+        return DialDetectionConfig
+                .builder()
+                .method(DetectionMethodType.HOUGH)
+                .blurKernelSize(5)
                 .thresholdValue(150)
                 .build();
-        CircleDetectionStep circleDetectionStep = new CircleDetectionStep(config);
+    }
+
+    @Bean
+    public ConfigManager configManager(DialDetectionConfig dialDetectionConfig, HoughCircleConfig houghCircleConfig) {
+        return new ConfigManager(dialDetectionConfig, houghCircleConfig);
+    }
+
+    @Bean
+    public ImageProcessingPipeline imageProcessingPipeline(ConfigManager configManager) {
+        DialDetectionStep dialDetectionStep = new DialDetectionStep(configManager);
         ImageProcessingPipeline pipeline = new ImageProcessingPipeline();
-        pipeline.addStep(circleDetectionStep);
+        pipeline.addStep(dialDetectionStep);
         return pipeline;
     }
 
