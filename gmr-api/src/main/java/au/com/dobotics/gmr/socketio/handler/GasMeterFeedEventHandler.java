@@ -57,7 +57,7 @@ public class GasMeterFeedEventHandler {
     @OnConnect
     public void onConnect(SocketIOClient client) {
         String sessionId = client.getSessionId().toString();
-        clientStages.put(sessionId, ProcessingStage.ORIGINAL);
+        clientStages.put(sessionId, ProcessingStage.FINAL);
         processingFlags.put(sessionId, false);
         log.info("Client connected to {}: {}", NAMESPACE, sessionId);
     }

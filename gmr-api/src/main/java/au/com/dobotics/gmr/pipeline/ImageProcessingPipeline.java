@@ -42,11 +42,6 @@ public class ImageProcessingPipeline {
                 return rawData; // Return original if processing fails
             }
 
-            ProcessingStage stage = this.context.get(Context.Key.PROCESSING_STAGE, ProcessingStage.class);
-            if (stage.is(ProcessingStage.ORIGINAL)) {
-                return toArray(frame);
-            }
-
             try (Mat current = frame.clone()) {
                 for (ImageProcessingStep step : steps) {
                     try (Mat result = step.process(current, context)) {
@@ -55,16 +50,6 @@ public class ImageProcessingPipeline {
                 }
                 return toArray(current);
             }
-
-
-//                printImageInfo(processedFrame);
-                // Convert back to byte array (JPEG)
-//                Result result = new Result();
-//            result.data = toArray(processedFrame);
-//                result.height = processedFrame.rows();
-//                result.width = processedFrame.cols();
-//                result.status = "OK";
-
         }
     }
 
@@ -97,10 +82,6 @@ public class ImageProcessingPipeline {
 
         ProcessingStage stage = (ProcessingStage) context.get(Context.Key.PROCESSING_STAGE);
         boolean sendFinal = stage == ProcessingStage.FINAL;
-
-        if (ProcessingStage.ORIGINAL == stage) {
-            return frame;
-        }
 
         Mat blurred = new Mat();
         Mat gray = null;

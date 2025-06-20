@@ -53,6 +53,8 @@ export const useGasAnalyzerStore = defineStore('gasAnalyzerStore', {
     videoSrc: '',
     isVideoReady: false,
     mediaStream: null,
+    trackProcessor: null,
+    reader: null,
 
     // Processing Control
     isProcessing: false,
@@ -67,12 +69,12 @@ export const useGasAnalyzerStore = defineStore('gasAnalyzerStore', {
     },
 
     // Backend Response Data
-    processedFrame: null,
-    recognizedValue: null,
+    processedFrame: null
+    // recognizedValue: null,
 
     // Gemini AI State
-    isSuggestingParams: false,
-    geminiStatus: null,
+    // isSuggestingParams: false,
+    // geminiStatus: null,
   }),
   actions: {
     initSocket() {
@@ -119,7 +121,9 @@ export const useGasAnalyzerStore = defineStore('gasAnalyzerStore', {
     },
 
     updateProcessingStage(stage: Stage) {
-      this.socket && this.socket.emit('update-stage', stage)
+      if (this.socket && this.isSocketConnected) {
+        this.socket.emit('update-stage', stage)
+      }
     },
 
     renderProcessedFrame(metadata: Metadata, data: ArrayBuffer) {
@@ -145,9 +149,9 @@ export const useGasAnalyzerStore = defineStore('gasAnalyzerStore', {
         this.videoFile = file
         this.videoSrc = URL.createObjectURL(file)
         this.processedFrame = null
-        this.recognizedValue = null
+        // this.recognizedValue = null
         this.isVideoReady = false
-        this.geminiStatus = null
+        // this.geminiStatus = null
       } else {
         this.videoFile = null
         this.videoSrc = ''
@@ -164,7 +168,7 @@ export const useGasAnalyzerStore = defineStore('gasAnalyzerStore', {
       this.isProcessing = true
       this.socket!.emit('processing-start')
       await nextTick()
-      this.recognizedValue = null
+      // this.recognizedValue = null
 
       if (this.socket) {
         this.socket.emit('update_settings', {
@@ -202,7 +206,7 @@ export const useGasAnalyzerStore = defineStore('gasAnalyzerStore', {
         // the stream to it. While the stream is locked, no other reader can be acquired until
         // this one is released.
         const readable = this.trackProcessor.readable
-        const reader: ReadableStreamReader<VideoFrame> = readable.getReader()
+        const reader: ReadableStreamDefaultReader<VideoFrame> = readable.getReader()
         while (this.isProcessing) {
           // Result objects contain two properties:
           // done  - true if the stream has already given you all its data.
@@ -252,13 +256,6 @@ export const useGasAnalyzerStore = defineStore('gasAnalyzerStore', {
       // Get image data as blob
       const blob = await canvas.convertToBlob({ quality: 1.0, type: 'image/jpeg' })
       return await blob.arrayBuffer()
-
-      // const uint8Array = new Uint8Array(result)
-      // const checkJpeg = isJpeg(uint8Array)
-      // console.log(`${uint8Array[0]}, ${uint8Array[1]}, ${uint8Array[2]}`)
-
-      // Convert blob to array buffer
-      // return result
     },
 
     stopProcessing(videoPlayer?: HTMLVideoElement | null) {
@@ -273,6 +270,10 @@ export const useGasAnalyzerStore = defineStore('gasAnalyzerStore', {
         this.reader.cancel()
       }
       if (this.trackProcessor) {
+        if (this.trackProcessor.readable.locked) {
+          const r = this.trackProcessor.readable
+          this.trackProcessor.readable.releaseLock()
+        }
         this.trackProcessor.readable.cancel()
       }
       if (this.mediaStream) {
@@ -290,11 +291,13 @@ export const useGasAnalyzerStore = defineStore('gasAnalyzerStore', {
 
       canvas.width = videoElement.videoWidth
       canvas.height = videoElement.videoHeight
-      context.drawImage(videoElement, 0, 0, canvas.width, canvas.height)
+      if (context) {
+        context.drawImage(videoElement, 0, 0, canvas.width, canvas.height)
+      }
 
       if (asBase64Callback) {
         const base64Data = canvas.toDataURL('image/jpeg').split(',')[1]
-        asBase64Callback(base64Data)
+        // asBase64Callback(base64Data)
       } else {
         canvas.toBlob(
           (blob) => {
@@ -306,81 +309,7 @@ export const useGasAnalyzerStore = defineStore('gasAnalyzerStore', {
           0.9,
         )
       }
-    },
+    }
 
-    async suggestParameters(videoElement, canvasElement) {
-      if (!this.videoFile || !this.isVideoReady) {
-        alert('Please upload a video and wait for it to load.')
-        return
-      }
-
-      this.isSuggestingParams = true
-      this.geminiStatus = { message: 'Analyzing frame...', isError: false }
-
-      // Go to the first frame
-      videoElement.currentTime = 0
-
-      // Use a short delay to ensure the frame is drawn before capturing
-      setTimeout(() => {
-        this.fallbackCaptureAndSend(videoElement, async (base64ImageData) => {
-          if (!base64ImageData) {
-            this.geminiStatus = { message: 'Frame capture failed.', isError: true }
-            this.isSuggestingParams = false
-            return
-          }
-
-          const apiKey = '' // The platform will inject the key here
-          const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`
-
-          const prompt =
-            "Analyze this image of a gas meter dial. It might be blurry, have glare, or be at an angle. Based on visual characteristics, suggest optimal integer values for these OpenCV parameters: cannyThreshold1 (between 10-100), cannyThreshold2 (between 100-200), and houghAccumulatorThreshold (for circle detection, between 20-100). Provide your response ONLY as a valid JSON object with keys: 'cannyThreshold1', 'cannyThreshold2', and 'houghAccumulatorThreshold'. Do not include any other text or markdown formatting."
-
-          const payload = {
-            contents: [
-              {
-                parts: [
-                  { text: prompt },
-                  { inlineData: { mimeType: 'image/jpeg', data: base64ImageData } },
-                ],
-              },
-            ],
-          }
-
-          try {
-            const response = await fetch(apiUrl, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload),
-            })
-
-            if (!response.ok) {
-              throw new Error(`API Error: ${response.statusText}`)
-            }
-
-            const result = await response.json()
-            const text = result.candidates[0].content.parts[0].text
-
-            // Clean the response to ensure it's valid JSON
-            const jsonString = text
-              .replace(/```json/g, '')
-              .replace(/```/g, '')
-              .trim()
-            const suggestedParams = JSON.parse(jsonString)
-
-            // Update the parameters
-            this.opencvParams.cannyThreshold1 = suggestedParams.cannyThreshold1
-            this.opencvParams.cannyThreshold2 = suggestedParams.cannyThreshold2
-            this.opencvParams.houghAccumulatorThreshold = suggestedParams.houghAccumulatorThreshold
-
-            this.geminiStatus = { message: 'Parameters updated!', isError: false }
-          } catch (error) {
-            console.error('Gemini API Error:', error)
-            this.geminiStatus = { message: 'AI suggestion failed.', isError: true }
-          } finally {
-            this.isSuggestingParams = false
-          }
-        })
-      }, 200)
-    },
   },
 })

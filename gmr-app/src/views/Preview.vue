@@ -235,9 +235,9 @@
 </template>
 
 <script setup lang="ts">
-import { useGasAnalyzerStore } from '@/stores/use-gas-analyzer-store.ts'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import type { Stage } from '@/models/stage.ts'
+import { Stage } from '@/models/stage.ts'
+import { useGasAnalyzerStore } from '@/stores/use-gas-analyzer-store.ts'
 
 const store = useGasAnalyzerStore();
 const videoPlayer = ref<HTMLVideoElement | null>(null);
@@ -249,26 +249,23 @@ interface Option {
   value: Stage;
 }
 
-const selectedProcessingStage = ref<Stage>('final');
-
+const selectedProcessingStage = ref<Stage>(Stage.final);
 watch(selectedProcessingStage, (newValue) => {
   store.updateProcessingStage(newValue)
 })
 
-const processingStageOptions: Option[] = [
-  { label: 'Final' , value: 'final' },
-  { label: 'Grayscale' , value: 'grayscale' },
-  { label: 'Blurred' , value: 'blurred' },
-  { label: 'Canny Edge' , value: 'canny_edge' }
-]
+const processingStageOptions: Option[] =
+  Object.entries(Stage)
+    .map(([key, value]) => ({ label: key, value: value }));
 
 onMounted(() => {
   store.initSocket();
 
   // Watch for changes in OpenCV parameters and FPS
+  // (mutation: SubscriptionCallbackMutation<>, state: UnwrapRef<>)
   store.$subscribe((mutation, state) => {
     if (mutation.events?.key === 'opencvParams' || mutation.events?.key === 'fps') {
-      if (store.isSocketConnected) {
+      if (store.isSocketConnected && store.socket) {
         store.socket.emit('update_settings', {
           params: store.opencvParams,
           fps: store.fps
