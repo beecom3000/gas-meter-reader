@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { io, Socket } from 'socket.io-client'
 import type { Metadata } from '@/models/metadata.ts'
-import { nextTick, reactive } from 'vue'
+import { nextTick } from 'vue'
 import type { Stage } from '@/models/stage.ts'
 import { useNotification } from '@/composables/use-notification.ts'
 import axios from 'axios'
@@ -134,8 +134,8 @@ export const useGasAnalyzerStore = defineStore('gasAnalyzer', {
       })
     },
 
-    updateProcessingStage(stage: Stage) {
-      if (this.socket && this.isSocketConnected) {
+    updateProcessingStage(stage: Stage | undefined) {
+      if (this.socket && this.isSocketConnected && stage) {
         this.socket.emit('update-stage', stage)
       }
     },
@@ -330,7 +330,7 @@ export const useGasAnalyzerStore = defineStore('gasAnalyzer', {
       try {
         const response = await axios.put(
           'http://localhost:8080/gas/api/v1/config/dial/hough',
-          { ...this.houghCircleConfig }
+          { ...this.opencvParams.houghCircleConfig }
         )
         // emitter.emit('last-update', { timestamp: new Date() })
         showNotification('success', `Config has been saved successfully.`);

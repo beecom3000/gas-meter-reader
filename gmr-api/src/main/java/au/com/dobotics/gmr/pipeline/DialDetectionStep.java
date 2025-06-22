@@ -78,29 +78,29 @@ public class DialDetectionStep extends BaseProcessingStep implements ImageProces
             */
             // Detect circles
             // Strategy 1: Original Hough Circles with adjusted parameters
-//            HoughCircles(
-//                    edges,
-//                    circles,
-//                    HOUGH_GRADIENT,
-//                    houghConfig().getDp(),       // dp: Inverse ratio of accumulator resolution
-//                    minDist,                // minDist: minimum distance between detected centers
-//                    houghConfig().getParam1(),   // param1: upper threshold for the internal canny edge detector
-//                    houghConfig().getParam2(),   // param2: threshold for center detection
-//                    minRadius,              // min radius
-//                    maxRadius               // max radius
-//            );
-
-             HoughCircles(
+            HoughCircles(
                     edges,
                     circles,
                     HOUGH_GRADIENT,
                     houghConfig().getDp(),       // dp: Inverse ratio of accumulator resolution
-                    100,                // minDist: minimum distance between detected centers
+                    minDist,                // minDist: minimum distance between detected centers
                     houghConfig().getParam1(),   // param1: upper threshold for the internal canny edge detector
                     houghConfig().getParam2(),   // param2: threshold for center detection
-                    150,              // min radius
-                    400               // max radius
+                    minRadius,              // min radius
+                    maxRadius               // max radius
             );
+
+//             HoughCircles(
+//                    edges,
+//                    circles,
+//                    HOUGH_GRADIENT,
+//                    houghConfig().getDp(),       // dp: Inverse ratio of accumulator resolution
+//                    100,                // minDist: minimum distance between detected centers
+//                    houghConfig().getParam1(),   // param1: upper threshold for the internal canny edge detector
+//                    houghConfig().getParam2(),   // param2: threshold for center detection
+//                    150,              // min radius
+//                    400               // max radius
+//            );
 
 
             // Is circle found
@@ -120,11 +120,11 @@ public class DialDetectionStep extends BaseProcessingStep implements ImageProces
                     circles,
                     HOUGH_GRADIENT,
                     houghConfig().getDp(),       // dp: Inverse ratio of accumulator resolution
-                    100,                // minDist: minimum distance between detected centers
-                    100,    // param1: upper threshold for the internal canny edge detector
-                    22,  // param2: threshold for center detection
-                    150,              // min radius
-                    400               // max radius
+                    minDist,                // minDist: minimum distance between detected centers
+                    houghConfig().getParam1(),   // param1: upper threshold for the internal canny edge detector
+                    houghConfig().getParam2(),   // param2: threshold for center detection
+                    minRadius,              // min radius
+                    maxRadius               // max radius
             );
 
             if (!circles.empty()) {

@@ -48,78 +48,10 @@
 
       <!-- OpenCV Parameters -->
       <div class="q-mb-md">
-        <div class="row justify-between items-center q-mb-sm">
-          <div class="text-caption">4. OpenCV Parameters</div>
-
-          <q-badge
-            :color="'positive'"
-            rounded
-          >
-             Test
-          </q-badge>
-        </div>
-        <q-card class="q-pa-sm bg-grey-2">
-          <q-btn
-            @click="store.applyParamsChange(videoPlayer, canvasElement)"
-            :disable="!store.videoFile || store.isApplyingParams"
-            color="deep-purple"
-            class="sparkle-button q-mb-sm full-width"
-            :loading="store.isApplyingParams"
-          >
-            ✨ Apply Parameters
-          </q-btn>
-
-          <!-- Canny Edge Detection Threshold 1 -->
-          <div class="q-mb-sm">
-            <div class="text-caption">Canny Threshold 1</div>
-            <div class="row items-center">
-              <q-slider
-                v-model="store.opencvParams.cannyThreshold1"
-                :min="0"
-                :max="255"
-                :disable="store.isProcessing"
-                class="q-mr-sm"
-              />
-              <q-badge color="white" text-color="black" class="q-px-sm">
-                {{ store.opencvParams.cannyThreshold1 }}
-              </q-badge>
-            </div>
-          </div>
-
-          <!-- Canny Edge Detection Threshold 2 -->
-          <div class="q-mb-sm">
-            <div class="text-caption">Canny Threshold 2</div>
-            <div class="row items-center">
-              <q-slider
-                v-model="store.opencvParams.cannyThreshold2"
-                :min="0"
-                :max="255"
-                :disable="store.isProcessing"
-                class="q-mr-sm"
-              />
-              <q-badge color="white" text-color="black" class="q-px-sm">
-                {{ store.opencvParams.cannyThreshold2 }}
-              </q-badge>
-            </div>
-          </div>
-
-          <!-- Hough Circle Accumulator Threshold -->
-          <div>
-            <div class="text-caption">Hough Circle Threshold</div>
-            <div class="row items-center">
-              <q-slider
-                v-model="store.opencvParams.houghAccumulatorThreshold"
-                :min="10"
-                :max="200"
-                :disable="store.isProcessing"
-                class="q-mr-sm"
-              />
-              <q-badge color="white" text-color="black" class="q-px-sm">
-                {{ store.opencvParams.houghAccumulatorThreshold }}
-              </q-badge>
-            </div>
-          </div>
-        </q-card>
+        <OpenCVParametersView
+          :video-player="videoPlayer"
+          :canvas-element="canvasElement"
+        />
       </div>
 
       <!-- Action Buttons -->
@@ -149,7 +81,8 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { useGasAnalyzerStore } from '@/stores/use-gas-analyzer-store.ts'
-import { Stage } from '@/models/stage.ts'
+import { Stage, toStage } from '@/models/stage.ts'
+import OpenCVParametersView from '@/components/OpenCVParametersView.vue'
 
 interface Props {
   videoPlayer: HTMLVideoElement | null;
@@ -164,9 +97,9 @@ interface Option {
   value: string;
 }
 
-const selectedProcessingStage = ref<Stage>(Stage.final);
-watch(selectedProcessingStage, (newValue) => {
-  store.updateProcessingStage(newValue)
+const selectedProcessingStage = ref<string>(Stage.final);
+watch(selectedProcessingStage, (newValue: string) => {
+  store.updateProcessingStage(toStage(newValue))
 })
 
 const processingStageOptions: Option[] =
