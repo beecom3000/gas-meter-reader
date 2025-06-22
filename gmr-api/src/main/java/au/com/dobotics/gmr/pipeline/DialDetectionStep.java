@@ -34,7 +34,8 @@ public class DialDetectionStep extends BaseProcessingStep implements ImageProces
     public Mat process(Mat inputImage, Context context) {
         try (Mat gray = new Mat();
              Mat blurred = new Mat();
-             Mat binary = new Mat();
+             Mat threshold = new Mat();
+             Mat edges = new Mat();
              Vec4fVector circles = new Vec4fVector()) {
 
             // Convert to grayscale
@@ -51,12 +52,18 @@ public class DialDetectionStep extends BaseProcessingStep implements ImageProces
                 return blurred.clone();
             }
 
+            // Apply Canny Edge
+            Canny(blurred, edges, 30 , 100);
+            if (is(context, ProcessingStage.CANNY_EDGE)) {
+                return edges.clone();
+            }
+
             // Apply a threshold
-            threshold(blurred, binary, config().getThresholdValue(), 255,
+            threshold(blurred, threshold, config().getThresholdValue(), 255,
                     THRESH_BINARY);
 
             if (is(context, ProcessingStage.THRESHOLD)) {
-                return binary.clone();
+                return threshold.clone();
             }
 
             // Calculate absolute values from factors
@@ -64,49 +71,102 @@ public class DialDetectionStep extends BaseProcessingStep implements ImageProces
             int minRadius = (int) (gray.rows() * houghConfig().getMinRadius());
             int maxRadius = (int) (gray.rows() * houghConfig().getMaxRadius());
 
+            /*
+            1920 * 100
+                    1920 * 150
+                    1920 * 400
+            */
             // Detect circles
-            HoughCircles(
-                    binary,
+            // Strategy 1: Original Hough Circles with adjusted parameters
+//            HoughCircles(
+//                    edges,
+//                    circles,
+//                    HOUGH_GRADIENT,
+//                    houghConfig().getDp(),       // dp: Inverse ratio of accumulator resolution
+//                    minDist,                // minDist: minimum distance between detected centers
+//                    houghConfig().getParam1(),   // param1: upper threshold for the internal canny edge detector
+//                    houghConfig().getParam2(),   // param2: threshold for center detection
+//                    minRadius,              // min radius
+//                    maxRadius               // max radius
+//            );
+
+             HoughCircles(
+                    edges,
                     circles,
                     HOUGH_GRADIENT,
                     houghConfig().getDp(),       // dp: Inverse ratio of accumulator resolution
-                    minDist,                // minDist: minimum distance between detected centers
+                    100,                // minDist: minimum distance between detected centers
                     houghConfig().getParam1(),   // param1: upper threshold for the internal canny edge detector
                     houghConfig().getParam2(),   // param2: threshold for center detection
-                    minRadius,              // min radius
-                    maxRadius               // max radius
+                    150,              // min radius
+                    400               // max radius
             );
 
-            // Store detected circle
+
+            // Is circle found
             if (!circles.empty()) {
-                Scalar4f[] circleData = circles.get();
-                if (circleData.length >= 3) {
-                    float x = circleData[0].get();
-                    float y = circleData[1].get();
-                    float radius = circleData[2].get();
-//                Point center = new Point(Math.round(x), Math.round(y));
-                    context.put(Context.Key.CIRCLE, new Circle(x, y, radius));
-                }
-            } else {
-                log.warn("No circles found");
+                return renderCircle(circles, inputImage, context);
             }
 
-            // Visualization
-            Mat output = inputImage.clone();
-            if (circles.size() > 0) {
-                Scalar4f[] circleData = circles.get();
-                if (circleData.length >= 3) {
-                    float x = circleData[0].get();
-                    float y = circleData[1].get();
-                    float radius = circleData[2].get();
-                    circle(output, new Point(Math.round(x), Math.round(y)), Math.round(radius),
-                            Scalar.GREEN);
-                }
+            // Strategy 2: Morphological enhancement
+            Mat morph = new Mat();
+            Mat kernel = opencv_imgproc.getStructuringElement(
+                    MORPH_ELLIPSE,
+                    new Size(5, 5)
+            );
+            opencv_imgproc.morphologyEx(edges, morph, MORPH_CLOSE, kernel);
+            HoughCircles(
+                    morph,
+                    circles,
+                    HOUGH_GRADIENT,
+                    houghConfig().getDp(),       // dp: Inverse ratio of accumulator resolution
+                    100,                // minDist: minimum distance between detected centers
+                    100,    // param1: upper threshold for the internal canny edge detector
+                    22,  // param2: threshold for center detection
+                    150,              // min radius
+                    400               // max radius
+            );
+
+            if (!circles.empty()) {
+                return renderCircle(circles, inputImage, context);
             }
-            return output;
+
 //        } catch (Exception ex) {
 //            log.error("Error processing image", ex);
         }
-//        return null;
+        return inputImage.clone();
+    }
+
+    private Mat renderCircle(Vec4fVector circles, Mat inputImage, Context context) {
+        // Store detected circle
+        if (!circles.empty()) {
+            Scalar4f[] circleData = circles.get();
+            if (circleData.length >= 3) {
+                float x = circleData[0].get();
+                float y = circleData[1].get();
+                float radius = circleData[2].get();
+//                Point center = new Point(Math.round(x), Math.round(y));
+                context.put(Context.Key.CIRCLE, new Circle(x, y, radius));
+            }
+        } else {
+            log.warn("No circles found");
+        }
+
+        // Visualization
+        Mat output = inputImage.clone();
+        if (circles.size() > 0) {
+            Scalar4f[] circleData = circles.get();
+            if (circleData.length >= 3) {
+                float x = circleData[0].get();
+                float y = circleData[1].get();
+                float radius = circleData[2].get();
+                circle(output,
+                        new Point(Math.round(x), Math.round(y)), Math.round(radius),
+                        new Scalar(0, 255,   0, 3)
+                );
+            }
+            // Scalar.GREEN
+        }
+        return output;
     }
 }

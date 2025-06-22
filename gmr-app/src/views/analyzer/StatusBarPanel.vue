@@ -4,6 +4,7 @@
     {{ store.isSocketConnected ? 'Connected' : 'Disconnected' }}
   </q-badge>
   | FPS: {{ store.fps }} | Processing: {{ store.isProcessing ? 'Active' : 'Inactive' }}
+  | Server Mood: {{ store.serverStatusMessage }}
 </template>
 
 <script setup lang="ts">

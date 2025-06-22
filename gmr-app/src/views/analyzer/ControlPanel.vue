@@ -50,23 +50,23 @@
       <div class="q-mb-md">
         <div class="row justify-between items-center q-mb-sm">
           <div class="text-caption">4. OpenCV Parameters</div>
+
           <q-badge
-            :color="store.geminiStatus?.isError ? 'negative' : 'positive'"
+            :color="'positive'"
             rounded
-            v-if="store.geminiStatus"
           >
-            {{ store.geminiStatus.message }}
+             Test
           </q-badge>
         </div>
         <q-card class="q-pa-sm bg-grey-2">
           <q-btn
-            @click="store.suggestParameters(videoPlayer, canvasElement)"
-            :disable="!store.videoFile || store.isSuggestingParams"
+            @click="store.applyParamsChange(videoPlayer, canvasElement)"
+            :disable="!store.videoFile || store.isApplyingParams"
             color="deep-purple"
             class="sparkle-button q-mb-sm full-width"
-            :loading="store.isSuggestingParams"
+            :loading="store.isApplyingParams"
           >
-            ✨ Suggest with Gemini
+            ✨ Apply Parameters
           </q-btn>
 
           <!-- Canny Edge Detection Threshold 1 -->
@@ -147,14 +147,21 @@
 </template>
 
 <script setup lang="ts">
+import { ref, watch } from 'vue'
 import { useGasAnalyzerStore } from '@/stores/use-gas-analyzer-store.ts'
 import { Stage } from '@/models/stage.ts'
-import { ref, watch } from 'vue'
+
+interface Props {
+  videoPlayer: HTMLVideoElement | null;
+  canvasElement: HTMLCanvasElement | null;
+}
+
+defineProps<Props>();
 
 const store = useGasAnalyzerStore();
 interface Option {
   label: string;
-  value: Stage;
+  value: string;
 }
 
 const selectedProcessingStage = ref<Stage>(Stage.final);
@@ -164,7 +171,7 @@ watch(selectedProcessingStage, (newValue) => {
 
 const processingStageOptions: Option[] =
   Object.entries(Stage)
-    .map(([key, value]) => ({ label: key, value: value }));
+    .map(([key, value]) => ({ label: value.toString(), value: key }));
 </script>
 
 <style scoped>

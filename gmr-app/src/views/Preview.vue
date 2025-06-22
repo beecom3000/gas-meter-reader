@@ -69,6 +69,7 @@
                   </div>
                 </div>
 
+
                 <!-- OpenCV Parameters -->
                 <div class="q-mb-md">
                   <div class="row justify-between items-center q-mb-sm">
@@ -237,9 +238,9 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Stage } from '@/models/stage.ts'
-import { useGasAnalyzerStore } from '@/stores/use-gas-analyzer-store.ts'
+import { usePreviewStore } from '@/stores/use-preview-store.ts'
 
-const store = useGasAnalyzerStore();
+const store = usePreviewStore();
 const videoPlayer = ref<HTMLVideoElement | null>(null);
 const canvasElement = ref<HTMLCanvasElement | null>(null);
 const processedFrameCanvas = ref<HTMLCanvasElement | null>(null);

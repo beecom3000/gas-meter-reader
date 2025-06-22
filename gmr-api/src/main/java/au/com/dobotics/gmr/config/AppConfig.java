@@ -28,11 +28,21 @@ public class AppConfig {
         return HoughCircleConfig.builder()
                 .dp(1.0)
                 .minDist(100)
+                .param1(100)
+                .param2(25)
+                .minRadius(150)
+                .maxRadius(400)
+                .build();
+
+        /*
+                        .dp(1.0)
+                .minDist(100)
                 .param1(50)
                 .param2(30)
                 .minRadius(100)
                 .maxRadius(250)
                 .build();
+         */
     }
 
     @Bean

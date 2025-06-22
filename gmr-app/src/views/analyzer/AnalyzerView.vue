@@ -9,12 +9,15 @@
         <div class="row q-col-gutter-md">
           <!-- Left Column: Controls & Parameters -->
           <div class="col-12 col-md-4">
-            <control-panel></control-panel>
+            <control-panel
+              :video-player="videoPlayer"
+              :canvas-element="canvasElement"
+            />
           </div>
 
           <!-- Right Column: Video Displays -->
           <div class="col-12 col-md-8">
-            <display-panel></display-panel>
+            <display-panel ref="displayPanel"></display-panel>
           </div>
         </div>
 
@@ -28,7 +31,7 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, useTemplateRef, watch } from 'vue'
 import { useGasAnalyzerStore } from '@/stores/use-gas-analyzer-store.ts'
 import HeaderPanel from '@/views/analyzer/HeaderPanel.vue'
 import DisplayPanel from '@/views/analyzer/DisplayPanel.vue'
@@ -36,6 +39,11 @@ import ControlPanel from '@/views/analyzer/ControlPanel.vue'
 import StatusBarPanel from '@/views/analyzer/StatusBarPanel.vue'
 
 const store = useGasAnalyzerStore();
+
+const displayPanelRef = useTemplateRef('displayPanel')!
+
+const videoPlayer = computed(() => displayPanelRef.value && displayPanelRef.value!.videoPlayer)
+const canvasElement = computed(() => displayPanelRef.value &&  displayPanelRef.value!.canvasElement)
 
 onMounted(() => {
   store.initSocket();

@@ -57,6 +57,10 @@ const videoPlayer = ref<HTMLVideoElement | null>(null);
 const canvasElement = ref<HTMLCanvasElement | null>(null);
 const processedFrameCanvas = ref<HTMLCanvasElement | null>(null);
 
+defineExpose({
+  videoPlayer, canvasElement, processedFrameCanvas
+})
+
 // Watch when processed frame is returned
 watch(processedFrameCanvas, (newValue) => {
   if (newValue) {

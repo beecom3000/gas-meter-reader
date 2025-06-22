@@ -1,11 +1,9 @@
 import { defineStore } from 'pinia'
 import { io, Socket } from 'socket.io-client'
 import type { Metadata } from '@/models/metadata.ts'
-import { nextTick, reactive } from 'vue'
+import { nextTick } from 'vue'
 import type { Stage } from '@/models/stage.ts'
 import { useNotification } from '@/composables/use-notification.ts'
-import axios from 'axios'
-import type { HoughCircleConfig } from '@/models/dial-detection-config.ts'
 
 declare const MediaStreamTrackProcessor: any;
 
@@ -19,6 +17,7 @@ export interface State {
   videoFile: File | null;
   videoSrc: string;
   isVideoReady: boolean;
+  videoPlayer: HTMLVideoElement | null,
   mediaStream: MediaStream | null;
   trackProcessor: typeof MediaStreamTrackProcessor | null;
   reader: ReadableStreamReader<VideoFrame> | null;
@@ -31,19 +30,17 @@ export interface State {
 
   processedFrame: HTMLCanvasElement | null;
 
-  isApplyingParams: boolean;
 }
 
 export interface OpencvParams {
   cannyThreshold1: number;
   cannyThreshold2: number;
   houghAccumulatorThreshold: number;
-  houghCircleConfig?: HoughCircleConfig;
 }
 
  const { showNotification } = useNotification()
 
-export const useGasAnalyzerStore = defineStore('gasAnalyzer', {
+export const usePreviewStore = defineStore('preview', {
   state: (): State => ({
     // Connection and Status
     socket: null,
@@ -56,6 +53,7 @@ export const useGasAnalyzerStore = defineStore('gasAnalyzer', {
     videoFile: null,
     videoSrc: '',
     isVideoReady: false,
+    videoPlayer: null,
     mediaStream: null,
     trackProcessor: null,
     reader: null,
@@ -70,25 +68,15 @@ export const useGasAnalyzerStore = defineStore('gasAnalyzer', {
       cannyThreshold1: 50,
       cannyThreshold2: 150,
       houghAccumulatorThreshold: 50,
-      houghCircleConfig: {
-        dp: 1.0,
-        minDist: 100.0,
-        param1: 50,
-        param2: 30,
-        minRadius: 100,
-        maxRadius: 250,
-      }
     },
 
     // Backend Response Data
-    processedFrame: null,
+    processedFrame: null
     // recognizedValue: null,
 
     // Gemini AI State
-    isApplyingParams: false,
     // isSuggestingParams: false,
     // geminiStatus: null,
-
   }),
   actions: {
     initSocket() {
@@ -200,7 +188,7 @@ export const useGasAnalyzerStore = defineStore('gasAnalyzer', {
       if ('MediaStreamTrackProcessor' in window) {
         // Get video track
         const videoTrack: MediaStreamTrack = this.mediaStream!.getVideoTracks()[0]
-        await this.captureAndSend(videoTrack)
+        this.captureAndSend(videoTrack)
       } else {
         console.warn('MediaStreamTrackProcessor not supported in this browser')
         this.processingInterval = setInterval(() => {
@@ -323,24 +311,6 @@ export const useGasAnalyzerStore = defineStore('gasAnalyzer', {
           0.9,
         )
       }
-    },
-
-    async applyParamsChange() {
-      this.isApplyingParams = true;
-      try {
-        const response = await axios.put(
-          'http://localhost:8080/gas/api/v1/config/dial/hough',
-          { ...this.houghCircleConfig }
-        )
-        // emitter.emit('last-update', { timestamp: new Date() })
-        showNotification('success', `Config has been saved successfully.`);
-      } catch (error: Error | unknown) {
-        showNotification(
-          'error',
-          `Error during save dial configuration: ${error instanceof Error ? error.message : error}`
-        );
-      }
-      this.isApplyingParams = false;
     }
 
   },
