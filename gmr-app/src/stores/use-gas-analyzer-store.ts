@@ -325,12 +325,12 @@ export const useGasAnalyzerStore = defineStore('gasAnalyzer', {
       }
     },
 
-    async applyParamsChange() {
+    async applyParamsChange(method: string, params: HoughCircleConfig) {
       this.isApplyingParams = true;
       try {
         const response = await axios.put(
-          'http://localhost:8080/gas/api/v1/config/dial/hough',
-          { ...this.opencvParams.houghCircleConfig }
+          `http://localhost:8080/gas/api/v1/config/dial/${method}`,
+          { ...params }
         )
         // emitter.emit('last-update', { timestamp: new Date() })
         showNotification('success', `Config has been saved successfully.`);

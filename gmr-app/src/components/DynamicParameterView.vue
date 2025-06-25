@@ -1,7 +1,7 @@
 <template>
   <q-card class="q-pa-sm bg-grey-2">
     <q-btn
-      @click="store.applyParamsChange(videoPlayer, canvasElement)"
+      @click="store.applyParamsChange('hough', store.opencvParams.houghCircleConfig)"
       :disable="!store.videoFile || store.isApplyingParams"
       color="deep-purple"
       class="sparkle-button q-mb-sm full-width"
@@ -32,15 +32,6 @@
 
 <script setup lang="ts">
 import { useGasAnalyzerStore } from '@/stores/use-gas-analyzer-store.ts'
-
-export interface HoughCircleConfig {
-  dp: number
-  minDist: number
-  param1: number
-  param2: number
-  minRadius: number
-  maxRadius: number
-}
 
 const store = useGasAnalyzerStore()
 

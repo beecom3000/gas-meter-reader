@@ -67,9 +67,14 @@ public class DialDetectionStep extends BaseProcessingStep implements ImageProces
             }
 
             // Calculate absolute values from factors
-            double minDist = gray.rows() * houghConfig().getMinDist();
-            int minRadius = (int) (gray.rows() * houghConfig().getMinRadius());
-            int maxRadius = (int) (gray.rows() * houghConfig().getMaxRadius());
+//            double minDist = gray.rows() * houghConfig().getMinDist();
+//            int minRadius = (int) (gray.rows() * houghConfig().getMinRadius());
+//            int maxRadius = (int) (gray.rows() * houghConfig().getMaxRadius());
+
+            double minDist = houghConfig().getMinDist();
+            int minRadius = (int) houghConfig().getMinRadius();
+            int maxRadius = (int) houghConfig().getMaxRadius();
+
 
             /*
             1920 * 100
